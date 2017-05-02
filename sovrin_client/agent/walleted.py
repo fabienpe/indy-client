@@ -406,7 +406,7 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
             if len(rcvdAvailableClaims) > 0:
                 self.notifyMsgListener("    Available Claim(s): {}".
                     format(",".join(
-                    [rc.get(NAME) for rc in rcvdAvailableClaims])))
+                    sorted([rc.get(NAME) for rc in rcvdAvailableClaims]))))
             else:
                 self.notifyMsgListener("    Available Claim(s): "
                                        "No available claims found")
@@ -433,7 +433,7 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
                     li.availableClaims.extend(newAvailableClaims)
                     self.notifyMsgListener("    Available Claim(s): {}".
                         format(",".join(
-                        [rc.get(NAME) for rc in rcvdAvailableClaims])))
+                        sorted([rc.get(NAME) for rc in rcvdAvailableClaims]))))
                 try:
                     self._checkIfLinkIdentifierWrittenToSovrin(li,
                                                            newAvailableClaims)
