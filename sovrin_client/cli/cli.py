@@ -1350,6 +1350,14 @@ class SovrinCli(PlenumCli):
         attributesWithValue = c.proofRequest.attributes
         c.proofRequest.selfAttestedAttrs = {}
         for k, v in c.proofRequest.attributes.items():
+            if not filteredMatchingClaims:
+                defaultValue = attributesWithValue[k] or v
+                selfAttestedValue = c.selfAttestedAttrs.get(k)
+                if selfAttestedValue:
+                    attributesWithValue[k] = selfAttestedValue
+                    c.proofRequest.selfAttestedAttrs[k] = selfAttestedValue
+                else:
+                    attributesWithValue[k] = defaultValue
             for li, cl, issuedAttrs in filteredMatchingClaims:
                 if k in issuedAttrs:
                     attributesWithValue[k] = issuedAttrs[k]
