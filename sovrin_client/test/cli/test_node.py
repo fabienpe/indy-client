@@ -29,7 +29,7 @@ def testConsecutiveAddSameNodeWithNodeAndClientPortSame(be, do, newStewardCli,
     newNodeVals['newNodeData'][CLIENT_IP] = nodeIp
     newNodeVals['newNodeData'][CLIENT_PORT] = nodePort
     doSendNodeCmd(do, newNodeVals,
-              expMsgs=["node and client ha can't be same"])
+              expMsgs=["node and client ha cannot be same"])
     exitFromCli(do)
 
 

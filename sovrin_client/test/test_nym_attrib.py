@@ -23,8 +23,8 @@ from sovrin_common.identity import Identity
 from sovrin_common.util import getSymmetricallyEncryptedVal
 from sovrin_node.test.helper import submitAndCheck, \
     makeAttribRequest, makeGetNymRequest, addAttributeAndCheck, TestNode
-from sovrin_client.test.helper import checkNacks, submitAndCheckNacks, \
-    genTestClient, createNym
+from sovrin_client.test.helper import checkNacks, submitAndCheckRejects, \
+    genTestClient, createNym, checkRejects
 
 logger = getlogger()
 
@@ -135,9 +135,9 @@ def testNonStewardCannotCreateATrustAnchor(nodeSet, client1, wallet1, looper):
             ROLE: TRUST_ANCHOR
         }
 
-        submitAndCheckNacks(looper=looper, client=client1, wallet=wallet1, op=op,
-                            identifier=wallet1.defaultId,
-                            contains="UnknownIdentifier")
+        submitAndCheckRejects(looper=looper, client=client1, wallet=wallet1, op=op,
+                              identifier=wallet1.defaultId,
+                              contains="UnknownIdentifier")
 
 
 def testStewardCreatesATrustAnchor(steward, addedTrustAnchor):
@@ -164,9 +164,9 @@ def testNonTrustAnchorCannotCreateAUser(nodeSet, looper, nonTrustAnchor):
             TXN_TYPE: NYM
         }
 
-        submitAndCheckNacks(looper, client, wallet, op,
-                            identifier=wallet.defaultId,
-                            contains="UnknownIdentifier")
+        submitAndCheckRejects(looper, client, wallet, op,
+                              identifier=wallet.defaultId,
+                              contains="UnknownIdentifier")
 
 
 def testTrustAnchorCreatesAUser(steward, userWalletA):
@@ -206,11 +206,6 @@ def nymsAddedInQuickSuccession(nodeSet, addedTrustAnchor, looper,
                 count += 1
 
     assert(count == len(nodeSet))
-
-
-@pytest.mark.skip(reason="SOV-560. NYM transaction now used to update too")
-def testAddNymsInQuickSuccession(nymsAddedInQuickSuccession):
-    pass
 
 
 def testTrustAnchorAddsAttributeForUser(addedRawAttribute):
@@ -253,7 +248,7 @@ def testClientGetsResponseWithoutConsensusForUsedReqId(nodeSet, looper, steward,
     def chk():
         nonlocal trustAnchor, lastReqId, replies
         for node in nodeSet:
-            last = node.spylog.getLast(TestNode.getReplyFor.__name__)
+            last = node.spylog.getLast(TestNode.getReplyFromLedger.__name__)
             assert last
             result = last.result
             assert result is not None
@@ -264,7 +259,7 @@ def testClientGetsResponseWithoutConsensusForUsedReqId(nodeSet, looper, steward,
             replies[node.clientstack.name][f.RESULT.nm].pop(TXN_TIME, None)
             result.result.pop(TXN_TIME, None)
 
-            assert replies[node.clientstack.name][f.RESULT.nm] == result.result
+            assert replies[node.clientstack.name][f.RESULT.nm] == {k:v for k, v in result.result.items() if v is not None}
 
     timeout = waits.expectedTransactionExecutionTime(len(nodeSet))
     looper.run(eventually(chk, retryWait=1, timeout=timeout))
@@ -310,7 +305,7 @@ def testTrustAnchorGetAttrsForUser(checkAddAttribute):
 
 def testNonTrustAnchorCannotAddAttributeForUser(nodeSet, nonTrustAnchor, userIdA,
                                             looper, attributeData):
-    with whitelistextras("UnknownIdentifier"):
+    with whitelistextras('UnauthorizedClientRequest'):
         client, wallet = nonTrustAnchor
         attrib = Attribute(name='test1 attribute',
                            origin=wallet.defaultId,
@@ -319,10 +314,10 @@ def testNonTrustAnchorCannotAddAttributeForUser(nodeSet, nonTrustAnchor, userIdA
                            ledgerStore=LedgerStore.RAW)
         reqs = makeAttribRequest(client, wallet, attrib)
         timeout = waits.expectedTransactionExecutionTime(len(nodeSet))
-        looper.run(eventually(checkNacks,
+        looper.run(eventually(checkRejects,
                               client,
                               reqs[0].reqId,
-                              "UnknownIdentifier", retryWait=1, timeout=timeout))
+                              'UnauthorizedClientRequest', retryWait=1, timeout=timeout))
 
 
 def testOnlyUsersTrustAnchorCanAddAttribute(nodeSet, looper,
@@ -337,9 +332,10 @@ def testOnlyUsersTrustAnchorCanAddAttribute(nodeSet, looper,
                            ledgerStore=LedgerStore.RAW)
         reqs = makeAttribRequest(client, wallet, attrib)
         timeout = waits.expectedReqNAckQuorumTime()
-        looper.run(eventually(checkNacks,
+        looper.run(eventually(checkRejects,
                               client,
                               reqs[0].reqId,
+                              'UnauthorizedClientRequest',
                               retryWait=1, timeout=timeout))
 
 
@@ -353,9 +349,10 @@ def testStewardCannotAddUsersAttribute(nodeSet, looper, steward,
                            ledgerStore=LedgerStore.RAW)
         reqs = makeAttribRequest(steward, stewardWallet, attrib)
         timeout = waits.expectedReqNAckQuorumTime()
-        looper.run(eventually(checkNacks,
+        looper.run(eventually(checkRejects,
                               steward,
                               reqs[0].reqId,
+                              'UnauthorizedClientRequest',
                               retryWait=1, timeout=timeout))
 
 
@@ -466,7 +463,7 @@ def testNonTrustAnchoredNymCanDoGetNym(nodeSet, addedTrustAnchor,
 
 def testUserAddAttrsForHerSelf(nodeSet, looper, userClientA, userWalletA,
                                userIdA, attributeData):
-    attr1 = json.dumps({'age': 25})
+    attr1 = json.dumps({'age': "25"})
     attrib = Attribute(name='test4 attribute',
                        origin=userIdA,
                        value=attr1,
@@ -477,7 +474,7 @@ def testUserAddAttrsForHerSelf(nodeSet, looper, userClientA, userWalletA,
 
 def testAttrWithNoDestAdded(nodeSet, looper, userClientA, userWalletA,
                                userIdA, attributeData):
-    attr1 = json.dumps({'age': 24})
+    attr1 = json.dumps({'age': "24"})
     attrib = Attribute(name='test4 attribute',
                        origin=userIdA,
                        value=attr1,

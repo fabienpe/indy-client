@@ -182,35 +182,22 @@ class Wallet(PWallet, TrustAnchoring):
     def getLastKnownSeqs(self, identifier):
         return self.lastKnownSeqs.get(identifier)
 
-    def getPendingTxnRequests(self, *identifiers):
-        if not identifiers:
-            identifiers = self.idsToSigners.keys()
-        else:
-            identifiers = set(identifiers).intersection(
-                set(self.idsToSigners.keys()))
-        requests = []
-        for identifier in identifiers:
-            lastTxn = self.getLastKnownSeqs(identifier)
-            op = {
-                TARGET_NYM: identifier,
-                TXN_TYPE: GET_TXNS,
-            }
-            if lastTxn:
-                op[DATA] = lastTxn
-            requests.append(self.signOp(op, identifier=identifier))
-        return requests
-
     def pendSyncRequests(self):
-        pendingTxnsReqs = self.getPendingTxnRequests()
-        for req in pendingTxnsReqs:
-            self.pendRequest(req)
+        # pendingTxnsReqs = self.getPendingTxnRequests()
+        # for req in pendingTxnsReqs:
+        #     self.pendRequest(req)
 
-    def preparePending(self):
+        # GET_TXNS is discontinued
+        pass
+
+    def preparePending(self, limit=None):
         new = {}
-        while self._pending:
+        count = 0
+        while self._pending and (limit is None or count < limit):
             req, key = self._pending.pop()
             sreq = self.signRequest(req)
             new[req.identifier, req.reqId] = sreq, key
+            count += 1
         self._prepared.update(new)
         # Return request in the order they were submitted
         return sorted([req for req, _ in new.values()],
@@ -275,7 +262,7 @@ class Wallet(PWallet, TrustAnchoring):
             nym = data.get(TARGET_NYM)
             idy = self.knownIds.get(nym)
             if idy:
-                idy.role = data.get(ROLE)
+                idy.role = data.get(ROLE) or None
                 idy.trustAnchor = data.get(f.IDENTIFIER.nm)
                 idy.last_synced = datetime.datetime.utcnow()
                 idy.verkey = data.get(VERKEY)
@@ -321,7 +308,7 @@ class Wallet(PWallet, TrustAnchoring):
 
     def prepReq(self, req, key=None):
         self.pendRequest(req, key=key)
-        return self.preparePending()[0]
+        return self.preparePending(limit=1)[0]
 
     def getLink(self, name, required=False) -> Link:
         l = self._links.get(name)

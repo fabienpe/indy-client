@@ -39,7 +39,6 @@ def getSampleLinkInvitation():
     }
 
 
-
 @pytest.fixture(scope="module")
 def philCli(be, do, philCLI):
     be(philCLI)

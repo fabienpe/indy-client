@@ -59,18 +59,6 @@ def testAgentStartedWithoutPoolStarted(emptyLooper, tdirWithPoolTxns):
     stopAgent(emptyLooper, newAgentName)
 
 
-def testStartAgentWithoutAddedToSovrin(poolNodesStarted, emptyLooper,
-                                        tdirWithPoolTxns):
-    newAgentName = "Agent3"
-    with pytest.raises(OperationError) as oeinfo:
-        runAgent(emptyLooper, tdirWithPoolTxns, agentPort,
-                 name=newAgentName)
-    assert "error occurred during operation: client request invalid: " \
-           "UnknownIdentifier('{}',)".format(agentWallet().defaultId) \
-           in str(oeinfo)
-    stopAgent(emptyLooper, newAgentName)
-
-
 def testStartNewAgentOnUsedPort(poolNodesStarted, tdirWithPoolTxns,
                                 emptyLooper, agentAddedBySponsor,
                                 agentStarted):

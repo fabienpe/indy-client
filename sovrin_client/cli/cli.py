@@ -28,6 +28,7 @@ from plenum.common.signer_did import DidSigner
 from plenum.common.signer_simple import SimpleSigner
 from plenum.common.constants import NAME, VERSION, TYPE, VERKEY, DATA, TXN_ID
 from plenum.common.txn_util import createGenesisTxnFile
+from plenum.common.types import f
 from plenum.common.util import randomString, getWalletFilePath
 
 from sovrin_client.agent.walleted_agent import WalletedAgent
@@ -478,24 +479,6 @@ class SovrinCli(PlenumCli):
                 return False
         return role
 
-    def _getTxnType(self, txnType):
-        try:
-            type =  SovrinTransactions(txnType)
-            return type.value
-        except ValueError:
-            pass
-
-        try:
-            type = SovrinTransactions[txnType]
-            return type.value
-        except KeyError:
-            pass
-
-        self.print("Invalid transaction type. Valid types are: {}".
-                   format(", ".join(map(lambda r: r.name, SovrinTransactions))),
-                   Token.Error)
-        return None
-
     def _getNym(self, nym):
         identity = Identity(identifier=nym)
         req = self.activeWallet.requestIdentity(
@@ -504,8 +487,6 @@ class SovrinCli(PlenumCli):
         self.print("Getting nym {}".format(nym))
 
         def getNymReply(reply, err, *args):
-            self.print("Transaction id for NYM {} is {}".
-                       format(nym, reply[TXN_ID]), Token.BoldBlue)
             try:
                 if reply[DATA]:
                     data=json.loads(reply[DATA])
@@ -616,7 +597,10 @@ class SovrinCli(PlenumCli):
                    format(name, version))
 
         def out(reply, error, *args, **kwargs):
-            self.print("Pool upgrade successful", Token.BoldBlue)
+            if error:
+                self.print("Pool upgrade failed", Token.BoldOrange)
+            else:
+                self.print("Pool upgrade successful", Token.BoldBlue)
 
         self.looper.loop.call_later(.2, self._ensureReqCompleted,
                                     req.key, self.activeClient, out)
