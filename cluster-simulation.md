@@ -1,5 +1,5 @@
 # Running a Simulation of a Sovrin Cluster and Agents
-One way to run through the [Sovrin Getting Started Guide](getting-started.md) is to set up a simulation of a Sovrin Validator Cluster.  This simulation resides in a single process on a single PC, but it sets up multiple asynchronous call-backs, one for each node being simulated.  These call-backs are handled sequentially in an event loop.  This gives the approximate performance of nultiple Sovrin Validator, Agent and CLI client nodes, but all running within a single process.  These instructions will configure the simulation, leaving you at the end with a CLI command-line prompt that you can use to complete the Getting Started Guide.
+One way to run through the [Sovrin Getting Started Guide](getting-started.md) is to set up a simulation of a Sovrin Validator Cluster.  This simulation resides in a single process on a single PC, but it sets up multiple asynchronous call-backs, one for each node being simulated.  These call-backs are handled sequentially in an event loop.  This gives the approximate performance of multiple Sovrin Validator, Agent and CLI client nodes, but all running within a single process.  These instructions will configure the simulation, leaving you at the end with a CLI command-line prompt that you can use to complete the Getting Started Guide.
 
 ## Install the Sovrin Client Software
 
@@ -40,11 +40,11 @@ Type this command:
 >>> start_getting_started()
 ```
 
-This command will start up a local pool of validator "nodes". This can take a few mintues and will produce a lot of console
+This command will start up a local pool of validator "nodes". This can take a few minutes and will produce a lot of console
 output. This output contains the initial communication between 4 nodes. This output can be ignored for this exercise.
  
 After starting up the local sovrin pool, three agents will be launched in virtual "nodes". During this this exercise we will be interacting
-with three agents, Faber Collage, Acme Corp and Thrift Bank. Again, launching these agents can take some time and a lot of
+with three agents, Faber College, Acme Corp and Thrift Bank. Again, launching these agents can take some time and a lot of
 output.
 
 After these tasks are complete, you should see an interactive prompt, like this:
