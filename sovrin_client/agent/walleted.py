@@ -442,7 +442,7 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
         body, (frm, ha) = msg
         link = self.wallet.getLinkBy(nonce=body.get(NONCE))
         if link:
-            self.logger.info('Ping sent to %s', link.remoteIdentifier)
+            self.logger.info('Ping sent to {}', link.remoteIdentifier)
             self.signAndSend({TYPE: 'pong'}, self.wallet.defaultId, frm,
                              origReqId=body.get(f.REQ_ID.nm))
 
@@ -452,7 +452,7 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
         if identifier:
             li = self._getLinkByTarget(getCryptonym(identifier))
             if li:
-                self.logger.info('Pong received from %s', li.remoteIdentifier)
+                self.logger.info('Pong received from {}', li.remoteIdentifier)
                 self.notifyMsgListener("    Pong received.")
             else:
                 self.notifyMsgListener("    Pong received from unknown endpoint.")
@@ -474,7 +474,7 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
                 if newAvailableClaims:
                     li.availableClaims.extend(newAvailableClaims)
                     claimNames = ", ".join(
-                        [n for n, _, _ in newAvailableClaims])
+                        sorted([n for n, _, _ in newAvailableClaims]))
                     self.notifyMsgListener(
                         "    Available Claim(s): {}\n".format(claimNames))
 
