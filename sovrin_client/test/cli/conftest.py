@@ -1147,15 +1147,6 @@ def thriftIsRunning(emptyLooper, tdirWithPoolTxns, thriftWallet,
     return thrift, thriftWallet
 
 
-@pytest.fixture(scope="module")
-def schemaAdded():
-    return ["credential definition is published"]
-
-
-@pytest.fixture(scope="module")
-def claimDefAdded():
-    return ["claim definition is published"]
-
 
 @pytest.fixture(scope='module')
 def savedKeyringRestored():
@@ -1359,9 +1350,8 @@ def cliWithNewStewardName(CliBuilder):
 
 
 @pytest.fixture(scope='module')
-def newStewardCli(be, do, poolNodesStarted, trusteeCli,
-                  connectedToTest, nymAddedOut, cliWithNewStewardName,
-                  newStewardVals):
+def newStewardCli(be, do, poolNodesStarted, trusteeCli, connectedToTest,
+                  cliWithNewStewardName, newStewardVals):
     be(trusteeCli)
     if not trusteeCli._isConnectedToAnyEnv():
         do('connect test', within=3,
