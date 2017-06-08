@@ -3,35 +3,37 @@ import collections
 import inspect
 import json
 import time
-from abc import abstractmethod
 from datetime import datetime
 from typing import Any
 from typing import Dict, Tuple, Union, List
-from typing import Set
 
+from anoncreds.protocol.issuer import Issuer
+from anoncreds.protocol.prover import Prover
+from anoncreds.protocol.types import AttribDef, ID
+from anoncreds.protocol.verifier import Verifier
 from base58 import b58decode
-
-from stp_core.common.log import getlogger
+from plenum.common.constants import NAME, VERSION
+from plenum.common.constants import PUBKEY
+from plenum.common.constants import TYPE, DATA, NONCE, IDENTIFIER, TARGET_NYM, ATTRIBUTES, VERKEY, VERIFIABLE_ATTRIBUTES
+from plenum.common.exceptions import NotConnectedToAny
 from plenum.common.signer_did import DidSigner
 from plenum.common.signing import serializeMsg
-from plenum.common.constants import TYPE, DATA, NONCE, IDENTIFIER, NAME, VERSION, \
-    TARGET_NYM, ATTRIBUTES, VERKEY, VERIFIABLE_ATTRIBUTES
 from plenum.common.types import f
 from plenum.common.util import getTimeBasedId, getCryptonym, \
     isMaxCheckTimeExpired, convertTimeBasedReqIdToMillis, friendlyToRaw
 from plenum.common.verifier import DidVerifier
+from sovrin_common.config import agentLoggingLevel
+from sovrin_common.constants import ENDPOINT
+from sovrin_common.exceptions import LinkNotFound, LinkAlreadyExists, \
+    NotConnectedToNetwork, LinkNotReady, VerkeyNotFound
+from sovrin_common.identity import Identity
+from sovrin_common.util import ensureReqCompleted
+from stp_core.common.log import getlogger
 
-from anoncreds.protocol.issuer import Issuer
-from anoncreds.protocol.prover import Prover
-from anoncreds.protocol.verifier import Verifier
-from anoncreds.protocol.globals import TYPE_CL
-from anoncreds.protocol.types import AttribDef, ID
-from plenum.common.exceptions import NotConnectedToAny
-from plenum.common.constants import NAME, VERSION
 from sovrin_client.agent.agent_issuer import AgentIssuer
-from sovrin_client.agent.backend import BackendSystem
 from sovrin_client.agent.agent_prover import AgentProver
 from sovrin_client.agent.agent_verifier import AgentVerifier
+from sovrin_client.agent.backend import BackendSystem
 from sovrin_client.agent.constants import ALREADY_ACCEPTED_FIELD, CLAIMS_LIST_FIELD, \
     REQ_MSG, PING, ERROR, EVENT, EVENT_NAME, EVENT_NOTIFY_MSG, \
     EVENT_POST_ACCEPT_INVITE, PONG, EVENT_NOT_CONNECTED_TO_ANY_ENV
@@ -44,13 +46,6 @@ from sovrin_client.client.wallet.attribute import Attribute, LedgerStore
 from sovrin_client.client.wallet.link import Link, constant
 from sovrin_client.client.wallet.types import ProofRequest, AvailableClaim
 from sovrin_client.client.wallet.wallet import Wallet
-from sovrin_common.exceptions import LinkNotFound, LinkAlreadyExists, \
-    NotConnectedToNetwork, LinkNotReady, VerkeyNotFound, RemoteEndpointNotFound
-from sovrin_common.identity import Identity
-from sovrin_common.constants import ENDPOINT
-from sovrin_common.util import ensureReqCompleted
-from sovrin_common.config import agentLoggingLevel
-from plenum.common.constants import PUBKEY
 
 logger = getlogger()
 logger.setLevel(agentLoggingLevel)
@@ -102,7 +97,7 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
         }
         self.logger = logger
 
-        self.issuer_backend = None
+        self.issuer_backend = None  # type: BackendSystem
 
         self._invites = {}  # type: Dict[Nonce, Tuple(InternalId, str)]
         self._attribDefs = {}  # type: Dict[str, AttribDef]
@@ -442,7 +437,7 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
         body, (frm, ha) = msg
         link = self.wallet.getLinkBy(nonce=body.get(NONCE))
         if link:
-            self.logger.info('Ping sent to {}', link.remoteIdentifier)
+            self.logger.info('Ping sent to {}'.format(link.remoteIdentifier))
             self.signAndSend({TYPE: 'pong'}, self.wallet.defaultId, frm,
                              origReqId=body.get(f.REQ_ID.nm))
 
@@ -452,7 +447,7 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
         if identifier:
             li = self._getLinkByTarget(getCryptonym(identifier))
             if li:
-                self.logger.info('Pong received from {}', li.remoteIdentifier)
+                self.logger.info('Pong received from {}'.format(li.remoteIdentifier))
                 self.notifyMsgListener("    Pong received.")
             else:
                 self.notifyMsgListener("    Pong received from unknown endpoint.")

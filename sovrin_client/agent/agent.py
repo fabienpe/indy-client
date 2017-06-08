@@ -8,19 +8,18 @@ from plenum.common.signer_simple import SimpleSigner
 from plenum.common.startable import Status
 from plenum.common.types import HA
 from plenum.common.util import randomString
-from sovrin_client.agent.agent_net import AgentNet
-from sovrin_client.client.client import Client
-from sovrin_client.client.wallet.wallet import Wallet
-
 from sovrin_common.config import agentLoggingLevel
 from sovrin_common.config_util import getConfig
 from sovrin_common.identity import Identity
 from sovrin_common.strict_types import strict_types, decClassMethods
-
 from stp_core.common.log import getlogger
 from stp_core.network.port_dispenser import genHa
 from stp_core.network.util import checkPortAvailable
 from stp_core.types import Identifier
+
+from sovrin_client.agent.agent_net import AgentNet
+from sovrin_client.client.client import Client
+from sovrin_client.client.wallet.wallet import Wallet
 
 logger = getlogger()
 logger.setLevel(agentLoggingLevel)
@@ -202,7 +201,7 @@ def createAgent(agentClass, name, wallet=None, basedirpath=None, port=None,
                       loop=loop)
 
 
-def create_client(base_dir_path=None, client_class=Client):
+def create_client(base_dir_path: str = None, client_class=Client, sighex: str = None):
     config = getConfig()
 
     if not base_dir_path:
@@ -211,7 +210,8 @@ def create_client(base_dir_path=None, client_class=Client):
     _, clientPort = genHa()
     client = client_class(randomString(6),
                           ha=("0.0.0.0", clientPort),
-                          basedirpath=base_dir_path)
+                          basedirpath=base_dir_path,
+                          sighex=sighex)
     return client
 
 
