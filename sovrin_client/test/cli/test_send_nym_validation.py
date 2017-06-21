@@ -25,20 +25,6 @@ def testSendNymSucceedsForUuidIdentifierAndOmittedVerkey(
        mapper=parameters, expect=NYM_ADDED, within=2)
 
 
-def testSendNymSucceedsForUuidIdentifierAndEmptyVerkey(
-        be, do, poolNodesStarted, trusteeCli):
-
-    parameters = {
-        'dest': createUuidIdentifier(),
-        'verkey': '',
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role} verkey={verkey}',
-       mapper=parameters, expect=INVALID_SYNTAX, within=2)
-
-
 def testSendNymSucceedsForUuidIdentifierAndFullVerkey(
         be, do, poolNodesStarted, trusteeCli):
 
@@ -63,66 +49,6 @@ def testSendNymSucceedsForHalfKeyIdentifierAndAbbrevVerkey(
     parameters = {
         'dest': halfKeyIdentifier,
         'verkey': abbrevVerkey,
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role} verkey={verkey}',
-       mapper=parameters, expect=NYM_ADDED, within=2)
-
-
-def testSendNymSucceedsForCryptonymIdentifierAndOmittedVerkey(
-        be, do, poolNodesStarted, trusteeCli):
-
-    parameters = {
-        'dest': createCryptonym(),
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role}',
-       mapper=parameters, expect=NYM_ADDED, within=2)
-
-
-def testSendNymSucceedsForCryptonymIdentifierAndEmptyVerkey(
-        be, do, poolNodesStarted, trusteeCli):
-
-    parameters = {
-        'dest': createCryptonym(),
-        'verkey': '',
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role} verkey={verkey}',
-       mapper=parameters, expect=INVALID_SYNTAX, within=2)
-
-
-def testSendNymSucceedsForCryptonymIdentifierAndSameFullVerkey(
-        be, do, poolNodesStarted, trusteeCli):
-
-    cryptonym = createCryptonym()
-
-    parameters = {
-        'dest': cryptonym,
-        'verkey': cryptonym,
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role} verkey={verkey}',
-       mapper=parameters, expect=NYM_ADDED, within=2)
-
-
-def testSendNymSucceedsForCryptonymIdentifierAndDifferentFullVerkey(
-        be, do, poolNodesStarted, trusteeCli):
-
-    cryptonym = createCryptonym()
-    _, fullVerkey = createUuidIdentifierAndFullVerkey()
-
-    parameters = {
-        'dest': cryptonym,
-        'verkey': fullVerkey,
         'role': Roles.TRUST_ANCHOR.name
     }
 
@@ -226,17 +152,30 @@ def testSendNymSucceedsForEmptyRole(
        mapper=parameters, expect=NYM_ADDED, within=2)
 
 
-@pytest.mark.skip(reason='SOV-1117')
-def testSendNymFailsForCryptonymIdentifierAndMatchedAbbrevVerkey(
+@pytest.mark.skip(reason='INDY-210')
+def testSendNymFailsForCryptonymIdentifierAndOmittedVerkey(
+        be, do, poolNodesStarted, trusteeCli):
+
+    parameters = {
+        'dest': createCryptonym(),
+        'role': Roles.TRUST_ANCHOR.name
+    }
+
+    be(trusteeCli)
+    do('send NYM dest={dest} role={role}',
+       mapper=parameters, expect=ERROR, within=2)
+
+
+@pytest.mark.skip(reason='INDY-210')
+def testSendNymFailsForCryptonymIdentifierAndFullVerkey(
         be, do, poolNodesStarted, trusteeCli):
 
     cryptonym = createCryptonym()
-    hexCryptonym = friendlyToHex(cryptonym)
-    abbrevVerkey = '~' + hexToFriendly(hexCryptonym[16:])
+    _, fullVerkey = createUuidIdentifierAndFullVerkey()
 
     parameters = {
         'dest': cryptonym,
-        'verkey': abbrevVerkey,
+        'verkey': fullVerkey,
         'role': Roles.TRUST_ANCHOR.name
     }
 
@@ -245,12 +184,12 @@ def testSendNymFailsForCryptonymIdentifierAndMatchedAbbrevVerkey(
        mapper=parameters, expect=ERROR, within=2)
 
 
-@pytest.mark.skip(reason='SOV-1117')
-def testSendNymFailsForCryptonymIdentifierAndUnmatchedAbbrevVerkey(
+def testSendNymFailsForCryptonymIdentifierAndMatchedAbbrevVerkey(
         be, do, poolNodesStarted, trusteeCli):
 
     cryptonym = createCryptonym()
-    _, abbrevVerkey = createHalfKeyIdentifierAndAbbrevVerkey()
+    hexCryptonym = friendlyToHex(cryptonym)
+    abbrevVerkey = '~' + hexToFriendly(hexCryptonym[16:])
 
     parameters = {
         'dest': cryptonym,
@@ -351,34 +290,6 @@ def testSendNymFailsIfAbbrevVerkeySizeIs17Bytes(
        mapper=parameters, expect=ERROR, within=2)
 
 
-@pytest.mark.skip(reason='SOV-1108')
-def testSendNymFailsIfCryptonymSizeIs31Bytes(
-        be, do, poolNodesStarted, trusteeCli):
-
-    parameters = {
-        'dest': rawToFriendly(randombytes(31)),
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role}',
-       mapper=parameters, expect=ERROR, within=2)
-
-
-@pytest.mark.skip(reason='SOV-1108')
-def testSendNymFailsIfCryptonymSizeIs33Bytes(
-        be, do, poolNodesStarted, trusteeCli):
-
-    parameters = {
-        'dest': rawToFriendly(randombytes(33)),
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role}',
-       mapper=parameters, expect=ERROR, within=2)
-
-
 @pytest.mark.skip(reason='SOV-1109')
 def testSendNymFailsIfUuidIdentifierIsHexEncoded(
         be, do, poolNodesStarted, trusteeCli):
@@ -424,20 +335,6 @@ def testSendNymFailsIfAbbrevVerkeyIsHexEncoded(
 
     be(trusteeCli)
     do('send NYM dest={dest} role={role} verkey={verkey}',
-       mapper=parameters, expect=ERROR, within=2)
-
-
-@pytest.mark.skip(reason='SOV-1109')
-def testSendNymFailsIfCryptonymIsHexEncoded(
-        be, do, poolNodesStarted, trusteeCli):
-
-    parameters = {
-        'dest': friendlyToHexStr(createCryptonym()),
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role}',
        mapper=parameters, expect=ERROR, within=2)
 
 
@@ -488,22 +385,6 @@ def testSendNymFailsIfAbbrevVerkeyContainsNonBase58Characters(
 
     be(trusteeCli)
     do('send NYM dest={dest} role={role} verkey={verkey}',
-       mapper=parameters, expect=ERROR, within=2)
-
-
-@pytest.mark.skip(reason='SOV-1109')
-def testSendNymFailsIfCryptonymContainsNonBase58Characters(
-        be, do, poolNodesStarted, trusteeCli):
-
-    cryptonym = createCryptonym()
-
-    parameters = {
-        'dest': cryptonym[:5] + '/' + cryptonym[6:],
-        'role': Roles.TRUST_ANCHOR.name
-    }
-
-    be(trusteeCli)
-    do('send NYM dest={dest} role={role}',
        mapper=parameters, expect=ERROR, within=2)
 
 
@@ -621,6 +502,20 @@ def testSendNymHasInvalidSyntaxIfIdentifierIsOmitted(
 
     be(trusteeCli)
     do('send NYM role={role} verkey={verkey}',
+       mapper=parameters, expect=INVALID_SYNTAX, within=2)
+
+
+def testSendNymHasInvalidSyntaxForUuidIdentifierAndEmptyVerkey(
+        be, do, poolNodesStarted, trusteeCli):
+
+    parameters = {
+        'dest': createUuidIdentifier(),
+        'verkey': '',
+        'role': Roles.TRUST_ANCHOR.name
+    }
+
+    be(trusteeCli)
+    do('send NYM dest={dest} role={role} verkey={verkey}',
        mapper=parameters, expect=INVALID_SYNTAX, within=2)
 
 
