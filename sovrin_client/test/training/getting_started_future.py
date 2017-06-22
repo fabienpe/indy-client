@@ -59,11 +59,16 @@ def demo_setup_logging(base_dir):
 
 
 def demo_start_agents(pool, looper, base_dir):
-    demo_start_agent(base_dir, create_faber, bootstrap_faber, pool.create_client(5500), looper, pool.steward_agent())
+    faber = demo_start_agent(base_dir, create_faber, bootstrap_faber, pool.create_client(5500), looper,
+                             pool.steward_agent())
 
-    demo_start_agent(base_dir, create_acme, bootstrap_acme, pool.create_client(5501), looper, pool.steward_agent())
+    acme = demo_start_agent(base_dir, create_acme, bootstrap_acme, pool.create_client(5501), looper,
+                            pool.steward_agent())
 
-    demo_start_agent(base_dir, create_thrift, bootstrap_thrift, pool.create_client(5502), looper, pool.steward_agent())
+    thrift = demo_start_agent(base_dir, create_thrift, bootstrap_thrift, pool.create_client(5502), looper,
+                              pool.steward_agent())
+
+    return [faber, acme, thrift]
 
 
 def demo_start_agent(base_dir, create_func, bootstrap_func, client, looper, steward):
@@ -86,6 +91,8 @@ def demo_start_agent(base_dir, create_func, bootstrap_func, client, looper, stew
     looper.runFor(2)
 
     looper.run(bootstrap_func(agent))
+
+    return agent
 
 
 def demo_wait_for_proof(looper, proof):

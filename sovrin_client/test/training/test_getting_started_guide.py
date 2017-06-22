@@ -1,6 +1,6 @@
-import pytest
-
 from sovrin_client.test.training.getting_started_future import *
+from sovrin_client.test.training.log_messages import setup_message_logging, print_log_uid_database, \
+    add_pool_uids, add_agent_uids
 
 # noinspection PyUnresolvedReferences
 from sovrin_node.test.conftest import tconf
@@ -16,11 +16,19 @@ def getting_started(base_dir=None):
 
     demo_setup_logging(base_dir)
 
-    pool = create_local_pool(base_dir)
-    demo_start_agents(pool, pool, base_dir)
+    pool, steward = create_local_pool(base_dir)
+
+    add_pool_uids(pool, steward)
+
+    agents = demo_start_agents(pool, pool, base_dir)
+
+    add_agent_uids(agents)
+
     # ###################################
     #  Alice's Wallet
     # ###################################
+
+    setup_message_logging()  # Start logging when pool ready and agents running. But could be started earlier.
 
     alice_agent = WalletedAgent(name="Alice",
                                 basedirpath=base_dir,
@@ -32,6 +40,8 @@ def getting_started(base_dir=None):
     pool.add(alice_agent)
 
     pool.runFor(1)
+
+    add_agent_uids([alice_agent])
 
     ####################################
     #  Faber Invitation
@@ -167,3 +177,5 @@ def getting_started(base_dir=None):
 
 if __name__ == "__main__":
     getting_started()
+    print_log_uid_database()
+    print("### END ###")
