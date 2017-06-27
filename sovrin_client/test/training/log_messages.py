@@ -1,14 +1,16 @@
 # !/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
-A set of function to filter and reformat Sovrin log entries in order to make them more easily readable and
+A set of functions to filter and reformat Sovrin log entries in order to make them more easily readable and
 facilitate understanding of the communication protocol happening between various nodes and agents on the Sovrin network.
+
 Given the relevant Sovrin logs come from various libraries (sovrin*, plenum, anoncreds, zstack, etc.), they are
-not all consistent in their initial formatting, and the code below has many it/then test to cater for various cases.
+not all consistent in their initial formatting, and the code below has many it/then tests to cater for various cases.
 It might not work for all but performs reasonably well with the test_getting_started_guide.py script.
 """
 import ast
 import inspect
+import json
 import logging
 import os
 import re
@@ -19,6 +21,7 @@ from enum import Enum, unique
 
 from anoncreds.protocol.utils import shorten, serializeToStr
 from base58 import alphabet
+from ledger.util import F
 from plenum.client.client import Client
 from plenum.common.constants import TXN_TIME, IDENTIFIER
 from plenum.common.ledger_manager import LedgerManager
@@ -27,27 +30,27 @@ from plenum.common.types import f, OPERATION
 from plenum.common.util import rawToFriendly
 from plenum.server.node import Node
 from plenum.server.propagator import Propagator
+from sovrin_common.config import agentLoggingLevel
 from sovrin_common.config_util import getConfig
-from sovrin_common.constants import ROLE, ATTR_NAMES, TXN_TYPE, TARGET_NYM, VERKEY
+from sovrin_common.constants import ROLE, ATTR_NAMES, TXN_TYPE, TARGET_NYM, VERKEY, REVOCATION, PRIMARY
 from sovrin_common.roles import Roles as SovrinRoles
 from sovrin_common.transactions import SovrinTransactions
-from stp_zmq.zstack import ZStack, KITZStack
-from zmq.utils.z85 import Z85CHARS
+from stp_zmq.zstack import ZStack
+from zmq.utils.z85 import Z85CHARS, decode as z85_decode
 
 from sovrin_client.agent.agent import Agent
+from sovrin_client.agent.msg_constants import CLAIM_REQ_FIELD
 from sovrin_client.agent.walleted import Walleted, Wallet
 from sovrin_client.agent.walleted_agent import WalletedAgent
 from sovrin_node.pool.local_pool import LocalPool
 
-Z85_CHARACTERS = re.escape(Z85CHARS.decode())
-B58_CHARACTERS = re.escape(alphabet)
-
-SPACE = " "
-INDENT = SPACE * 4
-
 LOGGING_LEVEL = logging.DEBUG
+if agentLoggingLevel != LOGGING_LEVEL:
+    print("Change log level of agents (sovrin_common.config.agentLoggingLevel) to {}.".format(LOGGING_LEVEL))
+    exit(-1)
 
-SHOW_RANDOM = True  # If False, replace random value with a comment, else add the comment before the random number.
+APPLY_FILTERING = True
+SHOW_RANDOM = True  # False, replace random value with a comment, else add the comment before the random number.
 USE_COLOURS = True  # If True, use colours to improve readability of output.
 
 SHOW_UNFORMATTED_LOG = False  # Mostly for debugging purpose
@@ -55,6 +58,13 @@ SHOW_FIELD_TYPE = False  # Mostly for debugging purpose
 
 # Default name of the logfile that is created
 LOG_FILE_NAME = "sovrin_messages.log"
+
+Z85_CHARACTERS = re.escape(Z85CHARS.decode())
+B58_CHARACTERS = re.escape(alphabet)
+
+SPACE = " "
+INDENT = SPACE * 4
+SEPARATOR = "\n"
 
 # Track number of times a particular role was used in order to properly increment friendly names
 role_instances = Counter()
@@ -64,7 +74,7 @@ uid_names = OrderedDict()
 
 # List of methods whose log record must be kept (exception to files_to_ignore)
 functions_to_keep = [
-    ZStack.setupOwnKeysIfNeeded
+    ZStack.setupOwnKeysIfNeeded,
 ]
 
 # Files to be filtered out from log recording
@@ -101,7 +111,7 @@ files_to_ignore = [
 # List of methods to be ignored from log recording
 functions_to_ignore = [
     Client.flushMsgsPendingConnection,
-    Client.__init__
+    Client.__init__,
 ]
 
 # List of messages explaining the meaning of some fields found in logs.
@@ -109,31 +119,31 @@ field_explanation = {
     "signature$": "Message signature",
 
     # anoncreds.protocol.types.PublicKey
-    "primary_n$": "p*q",
-    "primary_rms$": "Random number - S^random mod n",
-    "primary_rctxt$": "Random number - S^random mod n",
-    "primary_r_.+?$": "Random number",  # See anoncreds.protocol.primary.primary_claim_issuer.genKeys
-    "primary_s$": "Random quadratic number",
-    "primary_z$": "Random number - S^random mod n",
+    PRIMARY + "_[Nn]$": "p*q",
+    PRIMARY + "_[Rr]ms$": "Random number - S^random mod n",
+    PRIMARY + "_[Rr]ctxt$": "Random number - S^random mod n",
+    PRIMARY + "_[Rr]_.+?$": "Random number",  # See anoncreds.protocol.primary.primary_claim_issuer.genKeys
+    PRIMARY + "_[Ss]$": "Random quadratic number",
+    PRIMARY + "_[Zz]$": "Random number - S^random mod n",
     # seqId
 
     # anoncreds.protocol.types.RevocationPublicKey
-    "revocation_qr$": "Order of group",
-    "revocation_g$": "Random element of group G1",
-    "revocation_h$": "Random element of group G1",
-    "revocation_h0$": "Random element of group G1",
-    "revocation_h1$": "Random element of group G1",
-    "revocation_h2$": "Random element of group G1",
-    "revocation_htilde$": "Random element of group G1",
-    "revocation_u$": "Random element of group G1",
-    "revocation_pk$": "q^sk  (where sk is secret key)",
-    "revocation_y$": "h^x",
-    "revocation_x$": "Random element of group ZR",
+    REVOCATION + "_qr$": "Order of group",
+    REVOCATION + "_g$": "Random element of group G1",
+    REVOCATION + "_h$": "Random element of group G1",
+    REVOCATION + "_h0$": "Random element of group G1",
+    REVOCATION + "_h1$": "Random element of group G1",
+    REVOCATION + "_h2$": "Random element of group G1",
+    REVOCATION + "_htilde$": "Random element of group G1",
+    REVOCATION + "_u$": "Random element of group G1",
+    REVOCATION + "_pk$": "q^sk  (where sk is secret key)",
+    REVOCATION + "_y$": "h^x",
+    REVOCATION + "_x$": "Random element of group ZR",
     # seqId
 
     # anoncreds.protocol.types.ClaimRequest
-    "claimReq_U$": "See section 5/6 of https://tinyurl.com/ydep46yx",
-    "claimReq_Ur$": "See section 5/6 of https://tinyurl.com/ydep46yx",
+    CLAIM_REQ_FIELD + "_[Uu]$": "See section 5/6 of https://tinyurl.com/ydep46yx",
+    CLAIM_REQ_FIELD + "_[Uu]r$": "See section 5/6 of https://tinyurl.com/ydep46yx",
 
     # anoncreds.protocol.types.PrimaryClaim
     # attrs
@@ -179,15 +189,20 @@ class Colours(Enum):
 
 
 @unique
-class Roles(Enum):
+class UIDNames(Enum):
     """
-    Re-definition of main Sovrin roles, adding a generic "Client" role.
+    Define some default names based on Sovrin roles and Plenum names for the various unique identifiers found in logs.
     """
-    TRUSTEE = SovrinRoles.TRUSTEE.value
-    STEWARD = SovrinRoles.STEWARD.value
-    TGB = SovrinRoles.TGB.value
-    TRUST_ANCHOR = SovrinRoles.TRUST_ANCHOR.value
-    CLIENT = "999"
+    TRUSTEE = SovrinRoles.TRUSTEE.name
+    STEWARD = SovrinRoles.STEWARD.name
+    TGB = SovrinRoles.TGB.name
+    TRUST_ANCHOR = SovrinRoles.TRUST_ANCHOR.name
+    ROOT_HASH = F.rootHash.name
+    MERKLE_ROOT = f.MERKLE_ROOT.nm
+    TXN_ROOT_HASH = f.TXN_ROOT.nm
+    STATE_ROOT_HASH = f.STATE_ROOT.nm
+    DIGEST = f.DIGEST.nm
+    CLIENT = "CLIENT"  # New default name
 
     def __str__(self):
         return self.name
@@ -197,39 +212,229 @@ class Roles(Enum):
         return any(value == item.value for item in cls)
 
 
+class SovrinLogMessageFilter(logging.Filter):
+    """
+    Logging filter that is used to extract unique identifiers from Sovrin log messages and to filter
+    messages to be shown.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            return self._filter(record)
+        except:
+            traceback.print_exc()
+
+    def _filter(self, record: logging.LogRecord) -> bool:
+
+        msg = record.msg
+        # ###############################################################
+        # Look for unique identifiers (NYMs, public keys, hashes, nonces)
+
+        # X85-encoded unique identifiers
+        for (_, decoded_uid) in find_z85_uid_in_record(record):
+            add_uid_to_dictionary(decoded_uid, UIDNames.CLIENT)
+
+        # B58 encoded unique identifiers
+        for uid in find_b58_uid_in_record(record):
+            add_uid_to_dictionary(uid, UIDNames.CLIENT)
+        for (hash_value, key) in find_hashes_in_record(record):
+            add_uid_to_dictionary(hash_value, key)
+
+        # From _send declared within Agent.sendMessage
+        # logger.debug("Message sent (to -> {}): {}".format(ha, msg))
+        if record.filename == get_filename(Agent) and record.funcName == "_send":
+            search_result1 = re.search("'{}': '(.+?)',".format(VERKEY), msg)
+            search_result2 = re.search("'{}': '(.+?)'".format(IDENTIFIER), msg)
+            # The verification key corresponds to the identifier
+            if search_result1 and search_result2:
+                if search_result2.group(1) in uid_names:
+                    add_uid_to_dictionary(search_result1.group(1), uid_names[search_result2.group(1)][0] + " " + VERKEY)
+
+        # From  Walleted.accept_invitation
+        # logger.debug("{} accepting invitation from {} with id {}".format(self.name, link.name, link.localIdentifier))
+        # logger.info('Accepting invitation with nonce {} from id {}'.format(link.invitationNonce, link.localIdentifier))
+        if match_method(record, Walleted.accept_invitation):
+            search_result = re.search("(.+?) accepting invitation from (.+?) with id (.+?)$", msg)
+            if search_result and len(search_result.groups()) == 3:
+                add_uid_to_dictionary(search_result.group(3),
+                                      "{} ID with {}".format(search_result.group(1), search_result.group(2)))
+
+            search_result = re.search("nonce (.+?) from id (.+?)$", msg)
+            if search_result and len(search_result.groups()) == 2:
+                if search_result.group(2) not in uid_names:
+                    add_uid_to_dictionary(search_result.group(2), UIDNames.CLIENT)
+                add_uid_to_dictionary(search_result.group(1),
+                                      "Nonce for {}".format(uid_names[search_result.group(2)][0]))
+
+        # From Client.submitReqs
+        # logger.debug('Client {} sending request {}'.format(self, request))
+        if match_method(record, Client.submitReqs):
+            search_result = re.search("'{}': {{(.+?)}}".format(OPERATION), msg)
+            if search_result:
+                sub_msg = search_result.group(1)
+                search_result = re.search("'{}': '(.+?)'".format(ROLE), sub_msg)
+                if search_result:
+                    try:
+                        role_value = UIDNames(SovrinRoles(search_result.group(1)).name)
+                    except KeyError:
+                        role_value = UIDNames.CLIENT
+                else:
+                    role_value = UIDNames.CLIENT
+
+                search_result = re.search("'{}': '(.+?)'".format(TARGET_NYM), sub_msg)
+                if search_result:
+                    add_uid_to_dictionary(search_result.group(1), role_value)
+
+        # ################
+        # Do the filtering
+        if not APPLY_FILTERING:
+            return True
+
+        for method in functions_to_keep:
+            if match_method(record, method):
+                return True
+
+        if record.filename in files_to_ignore:
+            return False
+
+        for method in functions_to_ignore:
+            if match_method(record, method):
+                return False
+
+        # Same messages are sent by all nodes so only keep Node1
+        if (record.filename == get_filename(Node) and not msg.startswith("Node1")) or \
+                (match_method(record, Client.handleOneNodeMsg) and ("got msg from node Node1C:" not in msg)) or \
+                (match_method(record, ZStack.transmit) and (not msg.endswith("to Node1C"))) or \
+                (match_method(record, Node.handleOneNodeMsg) and (
+                        re.search("Node[0-9] msg.+?Node[0-9]'\)$", msg))):
+            return False
+
+        return True
+
+
+class SovrinLogHandler(logging.FileHandler):
+    """
+    Logging handler that reformat Sovrin log message to a more human readable form. It replaces unique identifiers
+    found by the logging filter by more friendly names.
+    """
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            return self._emit(record)
+        except:
+            traceback.print_exc()
+
+    def _emit(self, record: logging.LogRecord):
+        if record.filename == __file__:
+            super().emit(record)
+            return
+        msg = record.msg
+
+        if SHOW_UNFORMATTED_LOG:
+            record.msg = apply_colour(record.msg, Colours.GREY)
+            super().emit(record)
+            record.msg = msg
+
+        # Handle the case when the log contains an encoded message
+        if match_method(record, ZStack.transmit):
+            search_result = re.search("(^.+?transmitting message )(b'.+?')( to.+?)$", msg)
+            if search_result:
+                decoded_message = eval(search_result.group(2)).decode()
+                try:
+                    decoded_message = json.loads(decoded_message)
+                except json.JSONDecodeError:
+                    pass
+
+                formatted_message = format_data(decoded_message, 1)
+                msg = search_result.group(1) + formatted_message + search_result.group(3)
+                if msg[len(msg) - 1] != SEPARATOR:
+                    msg += SEPARATOR
+        else:
+            # Replace Z85 encoded NYMs by ASCII values. This is needed for further parsing.
+            for (raw_id, decoded_id) in find_z85_uid_in_record(record):
+                msg = msg.replace(raw_id, decoded_id)
+
+            if re.search("Message sent \(.+?\): OrderedDict", msg):
+                first_index = msg.find("OrderedDict")
+                _, last_index = find_matching_bracket(msg[first_index:], "(", ")")
+                last_index += first_index
+            else:
+                first_index, last_index = find_matching_bracket(msg, "{", "}")
+
+            if 0 <= first_index < last_index:
+                formatted_message = format_data(msg[first_index:last_index + 1])
+                msg = SEPARATOR + msg[:first_index] + SEPARATOR + formatted_message + SEPARATOR + msg[last_index + 1:]
+                if msg[len(msg) - 1] != SEPARATOR:
+                    msg += SEPARATOR
+
+        # Replace unique identifier with friendly name
+        for uid, name in uid_names.items():
+            friendly_name = format_random_value(name[0], uid)
+            msg = msg.replace(uid, friendly_name)
+
+        if re.search("###.*###", msg):
+            msg = apply_colour(msg, Colours.RED)
+
+        record.msg = msg
+
+        super().emit(record)
+
+
+def find_matching_bracket(msg: str, opening: str, closing: str) -> (int, int):
+    i = first_index = msg.find(opening)
+    if first_index >= 0:
+        count = 1
+        while count:
+            i += 1
+            if i < len(msg):
+                if msg[i] == opening:
+                    count += 1
+                if msg[i] == closing:
+                    count -= 1
+            else:
+                break
+        if count:
+            last_index = -1
+        else:
+            last_index = i
+    else:
+        last_index = -1
+    return first_index, last_index
+
+
 def get_filename(obj: object) -> str:
     return os.path.split(inspect.getsourcefile(obj))[1]
 
 
-def make_friendly_name(role: Roles = Roles.CLIENT) -> str:
+def make_friendly_name(role: UIDNames = UIDNames.CLIENT) -> str:
     """
     Make a friendly name from a role by maintaining a usage counter for each available role name.
     :param role: A valid role.
     :return: A name made from the role and its usage counter (e.g. trustee_1).
     """
     role_instances[role] += 1
-    return "{}{}".format(role.name.lower(), role_instances[role])
+    return "{}{}".format(role.value, role_instances[role])
 
 
-def add_uid_to_dictionary(nym: str, name: [str, Roles], update: bool = False) -> None:
+def add_uid_to_dictionary(nym: str, name: [str, UIDNames], update: bool = False) -> None:
     """
-    Maintains a list of NYM's and verkey's with a friendly name.
+    Maintains a list of NYM's and verkey's with a friendly name. Also keep the history of those names when updated.
     :param nym: NYM or verkey to be added to the dictionary.
     :param name: Friendly name or role of the NYM.
     :param update: If True and the nym already a key in the dictionary, then update the corresponding value.
     """
     if nym not in uid_names:
-        if isinstance(name, Roles):
+        if isinstance(name, UIDNames):
             name = make_friendly_name(name)
         logging.info("Adding NYM/verkey ({}) to database as {}".format(nym, apply_colour(name, Colours.BOLD)))
-        uid_names[nym] = "{}".format(name)
+        uid_names[nym] = ["{}".format(name)]
     else:
         if update:
-            if isinstance(name, Roles):
+            if isinstance(name, UIDNames):
                 name = make_friendly_name(name)
-            logging.info("Updating NYM/verkey ({}) in database from {} to {}".format(nym, uid_names[nym],
+            logging.info("Updating NYM/verkey ({}) in database from {} to {}".format(nym, uid_names[nym][0],
                                                                                      apply_colour(name, Colours.BOLD)))
-            uid_names[nym] = "{}".format(name)
+            uid_names[nym] = ["{}".format(name)] + uid_names[nym]
 
 
 def apply_colour(string: str, colour: Colours) -> str:
@@ -280,7 +485,7 @@ def format_data(data, indent_level: int = 0, field_type: str = "") -> str:
     formatted_data_string = ""
 
     if data is None:
-        return "None,\n"
+        return "None," + SEPARATOR
 
     if type(data) == bytes:
         data = data.decode()
@@ -292,11 +497,12 @@ def format_data(data, indent_level: int = 0, field_type: str = "") -> str:
         value = data
         if field_type != "":
             if field_type.endswith(OPERATION + "_" + TXN_TYPE) or \
+                    field_type.endswith("result" + "_" + TXN_TYPE) or \
                     field_type.endswith(OPERATION + "_" + f.RESULT.nm):
                 value = (SovrinTransactions(str(data)).name if data else "")
 
             elif field_type.endswith(OPERATION + "_" + ROLE):
-                value = (Roles(str(data)).name if data else "")
+                value = (SovrinRoles(str(data)).name if data else "")
 
             elif field_type.endswith(ATTR_NAMES):
                 value = (data.replace(",", ", "))
@@ -308,8 +514,8 @@ def format_data(data, indent_level: int = 0, field_type: str = "") -> str:
                     value = str(data)
 
             elif field_type.endswith(ROLE):
-                if Roles.has_value(str(data)):
-                    value = Roles(str(data)).name
+                if UIDNames.has_value(str(data)):
+                    value = UIDNames(str(data)).name
 
             else:
                 for field, explanation in field_explanation.items():
@@ -325,26 +531,26 @@ def format_data(data, indent_level: int = 0, field_type: str = "") -> str:
             value = (INDENT * indent_level) + str(data)
 
         if SHOW_FIELD_TYPE:
-            formatted_data_string += "{} ({}),\n".format(value, field_type)
+            formatted_data_string += "{} ({}),{}".format(value, field_type, SEPARATOR)
         else:
-            formatted_data_string += "{},\n".format(value)
+            formatted_data_string += "{},{}".format(value, SEPARATOR)
 
     elif type(data) in [list, set, tuple]:
-        formatted_data_string += "\n" + (INDENT * indent_level) + "[" + "\n"
+        formatted_data_string += SEPARATOR + (INDENT * indent_level) + "[" + SEPARATOR
         for element in data:
             formatted_data_string += INDENT * (indent_level + 1) + format_data(element, indent_level + 1, field_type)
         formatted_data_string += (INDENT * indent_level) + "]"
         if indent_level > 0:
-            formatted_data_string += ",\n"
+            formatted_data_string += "," + SEPARATOR
 
     elif isinstance(data, dict):
-        formatted_data_string += "\n" + (INDENT * indent_level) + "{" + "\n"
+        formatted_data_string += SEPARATOR + (INDENT * indent_level) + "{" + SEPARATOR
         for key, value in data.items():
             formatted_data_string += INDENT * (indent_level + 1) + apply_colour("'{}': ".format(key), Colours.RED)
             formatted_data_string += format_data(value, indent_level + 2, field_type + "_" + str(key))
         formatted_data_string += (INDENT * indent_level + "}")
         if indent_level > 0:
-            formatted_data_string += ",\n"
+            formatted_data_string += "," + SEPARATOR
 
     else:
         formatted_data_string = data
@@ -362,198 +568,101 @@ def match_method(record: logging.LogRecord, method: object) -> bool:
     return record.filename == get_filename(method) and record.funcName == method.__name__
 
 
-class SovrinLogHandler(logging.FileHandler):
-    def emit(self, record: logging.LogRecord):
-        try:
-            return self._emit(record)
-        except:
-            traceback.print_exc()
-
-    def _emit(self, record: logging.LogRecord):
-        if record.filename == __file__:
-            super().emit(record)
-            return
-
-        if SHOW_UNFORMATTED_LOG:
-            saved_msg = record.msg
-            record.msg = apply_colour(record.msg, Colours.GREY)
-            super().emit(record)
-            record.msg = saved_msg
-
-        msg = record.msg.replace(":null,", ":'null',")
-
-        # Replace NYM encoded using X85 strings by friendly strings
-        for method in [Node.processClientInBox,
-                       ZStack.handlePingPong,
-                       ZStack.sendPingPong,
-                       LedgerManager.processLedgerStatus,
-                       Walleted.handleEndpointMessage,
-                       Node.processClientInBox,
-                       Propagator.propagate,
-                       ]:
+def find_b58_uid_in_record(record: logging.LogRecord) -> [str]:
+    """
+    Generate list of B58 encoded unique identifiers found in some messages.
+    :param record: Log record under consideration.
+    :return: List string of unique identifiers found.
+    """
+    matches = []
+    for (method, search_string) in [
+        (Client.handleOneNodeMsg, "'{}': '([{}]+?)'".format(IDENTIFIER, B58_CHARACTERS)),
+        (Client.handleOneNodeMsg, "'{}': '([{}]+?)'".format(TARGET_NYM, B58_CHARACTERS)),
+        (Client.handleOneNodeMsg, "'{}': '(~?[{}]+?)'".format(VERKEY, B58_CHARACTERS)),
+        (Node.handleOneNodeMsg, "'{}': '([{}]+?)'".format(IDENTIFIER, B58_CHARACTERS)),
+        (Node.handleOneNodeMsg, "'{}': '([{}]+?)'".format(TARGET_NYM, B58_CHARACTERS)),
+        (Node.handleOneNodeMsg, "'{}': '(~?[{}]+?)'".format(VERKEY, B58_CHARACTERS)),
+        (Node.send, "'{}': '([{}]{{60}})'".format(f.SENDER_CLIENT.nm, B58_CHARACTERS)),
+        (Node.processClientInBox, "'{}': '([{}]+?)'".format(IDENTIFIER, B58_CHARACTERS)),
+        (Node.processClientInBox, "'{}': '([{}]+?)'".format(TARGET_NYM, B58_CHARACTERS)),
+        (Node.processClientInBox, "'{}': '(~?[{}]+?)'".format(VERKEY, B58_CHARACTERS)),
+        (ZStack.setupOwnKeysIfNeeded,
+         "Signing and Encryption keys were not found for ([{}]{{44}})\.".format(B58_CHARACTERS)),
+    ]:
             if match_method(record, method):
-                search_result = re.search("b'([{}]{{40}})'".format(Z85_CHARACTERS), msg)
+                search_result = re.search(search_string, record.msg)
                 if search_result:
-                    friendly_public_key = rawToFriendly(search_result.group(1).encode())
-                    msg = msg.replace(search_result.group(0), friendly_public_key)
-                    break
+                    matches.append(search_result.group(1))
 
-                search_result = re.search("([{}]{{40}})$".format(Z85_CHARACTERS), msg)
+    return matches
+
+
+def find_hashes_in_record(record: logging.LogRecord) -> [(str, UIDNames)]:
+    """
+    Generate list of hashes found in some messages.
+    :param record: Log record to be analysed.
+    :return: List of (hash, hash type) pairs
+    """
+    matches = []
+    for method in [
+        Client.handleOneNodeMsg,
+        Node.handleOneClientMsg,
+        Node.handleOneNodeMsg,
+        Node.postToNodeInBox,
+        Node.processClientInBox,
+        Node.validateNodeMsg,
+        Node.validateClientMsg,
+        Node.send
+    ]:
+        if match_method(record, method):
+            for key in [UIDNames.ROOT_HASH,
+                        UIDNames.MERKLE_ROOT,
+                        UIDNames.TXN_ROOT_HASH,
+                        UIDNames.STATE_ROOT_HASH,
+                        UIDNames.DIGEST]:
+                # Some hashes are B58 encoded, others are hexadecimal
+                search_result = re.search("'{}': '(.+?)'".format(key.value), record.msg)
                 if search_result:
-                    friendly_public_key = rawToFriendly(search_result.group(1).encode())
-                    msg = msg.replace(search_result.group(1), friendly_public_key)
-                    break
+                    matches.append((search_result.group(1), key))
 
-        # Replace other NYM encoded using X85 (those without the b'...' strings by friendly strings
-        for method in [Node.send,
-                       Node.handleOneNodeMsg,
-                       Node.validateNodeMsg,
-                       Node.postToNodeInBox
-                       ]:
+    return matches
+
+
+def find_z85_uid_in_record(record: logging.LogRecord) -> [(str, str)]:
+    """
+    Generate a list of z85 encoded unique identifiers.
+    :param record: Log record to be analysed.
+    :return: List of pairs of the original string with the decoded string.
+    """
+    matches = []
+    for (method, search_string) in [
+        (LedgerManager.processLedgerStatus, "(b'[{}]{{40}}')".format(Z85_CHARACTERS)),
+        (Node.processClientInBox, "processing (b'[{}]{{40}}') request".format(Z85_CHARACTERS)),
+        (Node.handleOneNodeMsg, "'{}': '([{}]{{40}})'".format(f.SENDER_CLIENT.nm, Z85_CHARACTERS)),
+        (Node.send, "'{}': '([{}]+?)'".format(f.SENDER_CLIENT.nm, Z85_CHARACTERS)),
+        (Node.validateNodeMsg, "'{}': '([{}]{{40}})'".format(f.SENDER_CLIENT.nm, Z85_CHARACTERS)),
+        (Node.postToNodeInBox, "'{}': '([{}]{{40}})'".format(f.SENDER_CLIENT.nm, Z85_CHARACTERS)),
+        (Node.processClientInBox, "processing (b'[{}]{{40}}') request".format(Z85_CHARACTERS)),
+        (Node.processRequest, "from (b'[{}]{{40}}')$".format(Z85_CHARACTERS)),
+        (Node.processPropagate, "'{}': '([{}]{{40}})'".format(f.SENDER_CLIENT.nm, Z85_CHARACTERS)),
+        (Node.processPropagate, "from (b'[{}]{{40}}')$".format(f.SENDER_CLIENT.nm, Z85_CHARACTERS)),
+        (Propagator.propagate, "from client ([{}]{{40}})$".format(Z85_CHARACTERS)),
+        (Propagator.propagate, "from client (b'[{}]{{40}}')$".format(Z85_CHARACTERS)),
+        (Walleted.handleEndpointMessage, "(b'[{}]{{40}}')".format(Z85_CHARACTERS)),
+        (ZStack.handlePingPong, "got ping from (b'[{}]{{40}}')".format(Z85_CHARACTERS)),
+        (ZStack.sendPingPong, "(b'[{}]{{40}}')".format(Z85_CHARACTERS))
+    ]:
             if match_method(record, method):
-                search_result = re.search("'{}': '([{}]+?)'".format(f.SENDER_CLIENT.nm, Z85_CHARACTERS), msg)
+                search_result = re.search(search_string, record.msg)
                 if search_result:
-                    friendly_public_key = rawToFriendly(search_result.group(1).encode())
-                    msg = msg.replace(search_result.group(1), friendly_public_key)
-                    break
+                    if search_result.group(1).startswith("b'"):
+                        friendly_public_key = rawToFriendly(z85_decode(search_result.group(1)[2:42]))
+                    else:
+                        friendly_public_key = rawToFriendly(z85_decode(search_result.group(1)))
+                    assert not friendly_public_key.startswith("b'")
+                    matches.append((search_result.group(1), friendly_public_key))
 
-        # Replace other encoded strings
-        for method in [KITZStack.transmit
-                       ]:
-            if match_method(record, method):
-                search_result = re.search("b'([{}]+?)'".format(B58_CHARACTERS), msg)
-                if search_result:
-                    msg = msg.replace(search_result.group(0), search_result.group(1))
-                    break
-
-        # Find dictionary data structure and expand over multiple lines
-        if f.MSGS.nm in msg:  # and BATCH in msg ?
-            msg = msg.replace("'{", "{")
-            msg = msg.replace("}'", "}")
-            first_index = msg.find("[")
-            last_index = msg.rfind("]")
-        elif re.search("Message sent \(.+?\): OrderedDict", msg):
-            first_index = msg.find("OrderedDict")
-            last_index = len(msg) - 1
-        else:
-            first_index = msg.find("{")
-            last_index = msg.rfind("}")
-
-        if 0 <= first_index < last_index:
-            formatted_message = format_data(msg[first_index:last_index + 1])
-            msg = "\n" + msg[:first_index] + "\n" + formatted_message + "\n" + msg[last_index + 1:]
-            if msg[len(msg) - 1] != "\n":
-                msg += "\n"
-
-        # Replace unique identifier with friendly name
-        for uid, name in uid_names.items():
-            friendly_name = format_random_value(name, uid)
-            msg = msg.replace(uid, friendly_name)
-        record.msg = msg
-
-        super().emit(record)
-
-
-class SovrinLogMessageFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        try:
-            return self._filter(record)
-        except:
-            traceback.print_exc()
-
-    def _filter(self, record: logging.LogRecord) -> bool:
-
-        # #######################################################
-        # Look for unique identifiers (NYMs, public keys, nonces)
-        if match_method(record, ZStack.setupOwnKeysIfNeeded):
-            search_result = re.search("keys were not found for ([{}]{{44}})\.".format(B58_CHARACTERS), record.msg)
-            if search_result:
-                add_uid_to_dictionary(search_result.group(1), Roles.CLIENT)
-
-        elif match_method(record, ZStack.handlePingPong) or \
-                match_method(record, Propagator.propagate) or \
-                match_method(record, Node.processClientInBox):
-            # 'Node3C processing b\\'ML+Jsg@ao:WtwrJQT*l2V.xzF&ZKr%ku9o$my%a0\\' request LEDGER_STATUS
-            # 'Node1 propagating CaKm3SP1dA9mePKKGT9HrW request 1498122067640921 from client b\\'Oq.j*T01mpi2.ESP45oPDPH^m8C2adi1WFzqpzpj\\''
-            # TODO: Find better regular expression and try to merge with next if statements
-            search_result = re.search("b?'?([{}]{{40}})'?".format(Z85_CHARACTERS), record.msg)
-            if search_result:
-                friendly_public_key = rawToFriendly(search_result.group(1).encode())
-                add_uid_to_dictionary(friendly_public_key, Roles.CLIENT)
-
-            # 'Node2 propagating R23qboDUA2NmwtNcnqboR2 request 1498122962642415 from client f%x2eJ!a9R7^&#Lo24^I?7<BDbo.-wlpuFNL[dFL'
-            search_result = re.search(" ([{}]{{40}})$".format(Z85_CHARACTERS), record.msg)
-            if search_result:
-                friendly_public_key = rawToFriendly(search_result.group(1).encode())
-                add_uid_to_dictionary(friendly_public_key, Roles.CLIENT)
-
-        elif match_method(record, Node.handleOneNodeMsg) or \
-                match_method(record, Node.send) or \
-                match_method(record, Node.validateNodeMsg) or \
-                match_method(record, Node.postToNodeInBox):
-            search_result = re.search("'{}': '([{}]+?)'".format(f.SENDER_CLIENT.nm, Z85_CHARACTERS), record.msg)
-            if search_result:
-                friendly_public_key = rawToFriendly(search_result.group(1).encode())
-                add_uid_to_dictionary(friendly_public_key, Roles.CLIENT)
-
-        elif record.filename == get_filename(Agent) and record.funcName == "_send":
-            search_result1 = re.search("'{}': '(.+?)',".format(VERKEY), record.msg)
-            search_result2 = re.search("'{}': '(.+?)'".format(IDENTIFIER), record.msg)
-            if search_result1 and search_result2:
-                if search_result2.group(1) in uid_names:
-                    add_uid_to_dictionary(search_result1.group(1), uid_names[search_result2.group(1)] + " " + VERKEY)
-
-        elif match_method(record, Walleted.accept_invitation):
-            search_result = re.search("(.+?) accepting invitation from (.+?) with id (.+?)$", record.msg)
-            if search_result and len(search_result.groups()) == 3:
-                add_uid_to_dictionary(search_result.group(3),
-                                      "{} ID with {}".format(search_result.group(1), search_result.group(2)))
-
-            search_result = re.search("nonce (.+?) from id (.+?)$", record.msg)
-            if search_result and len(search_result.groups()) == 2:
-                if search_result.group(2) not in uid_names:
-                    add_uid_to_dictionary(search_result.group(2), Roles.CLIENT)
-                add_uid_to_dictionary(search_result.group(1), "Nonce for {}".format(uid_names[search_result.group(2)]))
-
-        elif match_method(record, Client.submitReqs):
-            search_result = re.search("'{}': {{(.+?)}}".format(OPERATION), record.msg)
-            if search_result:
-                sub_msg = search_result.group(1)
-                search_result = re.search("'{}': '(.+?)'".format(ROLE), sub_msg)
-                if search_result:
-                    try:
-                        role_value = Roles(search_result.group(1))
-                    except KeyError:
-                        role_value = Roles.CLIENT
-                else:
-                    role_value = Roles.CLIENT
-
-                search_result = re.search("'{}': '(.+?)'".format(TARGET_NYM), sub_msg)
-                if search_result:
-                    add_uid_to_dictionary(search_result.group(1), role_value)
-
-        else:
-            pass
-
-        # ################
-        # Do the filtering
-        for method in functions_to_keep:
-            if match_method(record, method):
-                return True
-
-        if record.filename in files_to_ignore:
-            return False
-
-        for method in functions_to_ignore:
-            if match_method(record, method):
-                return False
-
-        if (record.filename == get_filename(Node) and not record.msg.startswith("Node1")) or \
-                (match_method(record, Client.handleOneNodeMsg) and ("got msg from node Node1C:" not in record.msg)):
-            # Same messages are sent by other nodes so only keep Node1
-            return False
-
-        return True
+    return matches
 
 
 def add_wallet_uids(wallet: Wallet, agent_name: str) -> None:
@@ -634,6 +743,17 @@ def setup_message_logging() -> None:
                                                style=getConfig().logFormatStyle)
 
     logging.root.addHandler(file_handler)
+
+
+    # if os.path.exists("unfiltered_" + LOG_FILE_NAME):
+    #     os.remove("unfiltered_" + LOG_FILE_NAME)
+    # unfiltered_file_handler = SovrinLogHandler("unfiltered_" + LOG_FILE_NAME)
+    #
+    # unfiltered_file_handler.setLevel(LOGGING_LEVEL)
+    # unfiltered_file_handler.formatter = logging.Formatter(fmt=getConfig().logFormat,
+    #                                                       style=getConfig().logFormatStyle)
+    #
+    # logging.root.addHandler(unfiltered_file_handler)
 
 
 def print_log_uid_database() -> None:
