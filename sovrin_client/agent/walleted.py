@@ -811,12 +811,12 @@ class Walleted(AgentIssuer, AgentProver, AgentVerifier):
             existingLinkInvites = self.wallet. \
                 getMatchingLinks(linkName)
             if len(existingLinkInvites) >= 1:
-                return self._mergeInvitaion(invitationData)
+                return self._mergeInvitation(invitationData)
             Link.validate(invitationData)
             link = self.loadInvitation(invitationData)
             return link
 
-    def _mergeInvitaion(self, invitationData):
+    def _mergeInvitation(self, invitationData):
         linkInvitation = invitationData.get('link-invitation')
         linkName = linkInvitation['name']
         link = self.wallet.getLink(linkName)
