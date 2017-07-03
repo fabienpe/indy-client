@@ -197,6 +197,8 @@ def getting_started(base_dir=None):
 
     demo_wait_for_proof(pool, load_kyc_request)
 
+    pool.shutdownSync()
+
 if __name__ == "__main__":
     getting_started()
     print_log_uid_database()
