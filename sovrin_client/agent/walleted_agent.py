@@ -1,7 +1,10 @@
 import errno
 import os
 
+from anoncreds.protocol.repo.attributes_repo import AttributeRepoInMemory
 from plenum.common.util import normalizedWalletFileName, saveGivenWallet, getLastSavedWalletFileName, getWalletByPath
+from sovrin_common.config_util import getConfig
+
 from sovrin_client.agent.agent import Agent
 from sovrin_client.agent.caching import Caching
 from sovrin_client.agent.walleted import Walleted
@@ -10,9 +13,6 @@ from sovrin_client.anon_creds.sovrin_prover import SovrinProver
 from sovrin_client.anon_creds.sovrin_verifier import SovrinVerifier
 from sovrin_client.client.client import Client
 from sovrin_client.client.wallet.wallet import Wallet
-from sovrin_common.config_util import getConfig
-
-from anoncreds.protocol.repo.attributes_repo import AttributeRepoInMemory
 
 
 class WalletedAgent(Walleted, Agent, Caching):
@@ -31,6 +31,8 @@ class WalletedAgent(Walleted, Agent, Caching):
                        config=config, endpointArgs=endpointArgs)
 
         self.config = getConfig(basedirpath)
+        if basedirpath:  # The getConfig function does not take basedirpath into account
+            self.config.baseDir = basedirpath  # so forcing an update on baseDir
 
         self._wallet = None
 
