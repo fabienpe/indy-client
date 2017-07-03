@@ -15,9 +15,10 @@ def getting_started(base_dir=None):
 
     if base_dir is None:
         base_dir = TemporaryDirectory().name
+    logging.info("### Base directory is: {} ###".format(base_dir))
 
     demo_setup_logging(base_dir)
-    setup_message_logging()
+    setup_message_logging(base_dir)
 
     logging.info("### Start creating pool and stewards ###")
     pool, steward = create_local_pool(base_dir)
