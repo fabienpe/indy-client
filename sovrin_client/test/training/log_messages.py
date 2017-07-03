@@ -7,7 +7,52 @@ facilitate understanding of the communication protocol happening between various
 Given the relevant Sovrin logs come from various libraries (sovrin*, plenum, anoncreds, zstack, etc.), they are
 not all consistent in their initial formatting, and the code below has many it/then tests to cater for various cases.
 It might not work for all but performs reasonably well with the test_getting_started_guide.py script.
+
+Tested with the following environment:
+anoncreds==0.3.4
+base58==0.2.5
+certifi==2017.4.17
+chardet==3.0.4
+Charm-Crypto==0.0.0
+crypto==1.4.1
+idna==2.5
+ioflo==1.5.4
+jsonpickle==0.9.4
+lazy-object-proxy==1.3.1
+ledger==0.2.15
+leveldb==0.194
+libnacl==1.5.1
+Naked==0.1.31
+orderedset==2.0
+plenum==0.3.18
+portalocker==0.5.7
+prompt-toolkit==0.57
+psutil==5.2.2
+py==1.4.34
+Pygments==2.2.0
+pyparsing==2.2.0
+pytest==3.1.2
+python-dateutil==2.6.0
+PyYAML==3.12
+pyzmq==16.0.2
+raet==0.6.7
+requests==2.18.1
+rlp==0.5.1
+semver==2.7.7
+sha3==0.2.1
+shellescape==3.4.1
+six==1.10.0
+sortedcontainers==1.5.7
+sovrin-common==0.2.13
+sovrin-node== from https://github.com/fabienpe/sovrin-node
+state-trie==0.1.1
+stp==0.1.11
+timeout-decorator==0.3.3
+ujson==1.35
+urllib3==1.21.1
+wcwidth==0.1.7
 """
+
 import ast
 import inspect
 import json
@@ -47,9 +92,9 @@ from sovrin_node.pool.local_pool import LocalPool
 LOGGING_LEVEL = logging.DEBUG
 if agentLoggingLevel != LOGGING_LEVEL:
     print("Change log level of agents (sovrin_common.config.agentLoggingLevel) to {}.".format(LOGGING_LEVEL))
-    exit(-1)
+    exit(0)
 
-APPLY_FILTERING = True
+APPLY_FILTERING = True  # Does not filter log messages, except the ones repeated for nodes
 SHOW_RANDOM = True  # False, replace random value with a comment, else add the comment before the random number.
 USE_COLOURS = True  # If True, use colours to improve readability of output.
 
@@ -75,6 +120,8 @@ uid_names = OrderedDict()
 # List of methods whose log record must be kept (exception to files_to_ignore)
 functions_to_keep = [
     ZStack.setupOwnKeysIfNeeded,
+    ZStack.sendPingPong,
+    ZStack.transmit
 ]
 
 # Files to be filtered out from log recording
@@ -91,6 +138,7 @@ files_to_ignore = [
     "ledger.py",
     "ledger_manager.py",
     "looper.py",
+    "message_processor.py",
     "monitor.py",
     "motor.py",
     "network_interface.py",
@@ -175,15 +223,15 @@ class Colours(Enum):
     Definitions of some colours for terminal output. Using ANSI escape codes.
     See: https://en.wikipedia.org/wiki/ANSI_escape_code
     """
-    GREY = "\033[90m"
-    RED = "\033[91m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    BLUE = "\033[94m"
-    MAGENTA = "\033[95m"
-    CYAN = "\033[96m"
-    WHITE = "\033[97m"
-    ENDC = "\033[0m"
+    GREY = "\033[90m"  # '<font color="grey">'
+    RED = "\033[91m"  # '<font color="red">'
+    GREEN = "\033[92m"  # '<font color="green">'
+    YELLOW = "\033[93m"  # '<font color="yellow">'
+    BLUE = "\033[94m"  # '<font color="blue">'
+    MAGENTA = "\033[95m"  # '<font color="magenta">'
+    CYAN = "\033[96m"  # '<font color="cyan">'
+    WHITE = "\033[97m"  # '<font color="white">'
+    ENDC = "\033[0m"  # '</font>
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
 
@@ -197,12 +245,13 @@ class UIDNames(Enum):
     STEWARD = SovrinRoles.STEWARD.name
     TGB = SovrinRoles.TGB.name
     TRUST_ANCHOR = SovrinRoles.TRUST_ANCHOR.name
+    CLIENT = "CLIENT"  # New default name
     ROOT_HASH = F.rootHash.name
     MERKLE_ROOT = f.MERKLE_ROOT.nm
     TXN_ROOT_HASH = f.TXN_ROOT.nm
     STATE_ROOT_HASH = f.STATE_ROOT.nm
     DIGEST = f.DIGEST.nm
-    CLIENT = "CLIENT"  # New default name
+
 
     def __str__(self):
         return self.name
@@ -287,6 +336,16 @@ class SovrinLogMessageFilter(logging.Filter):
 
         # ################
         # Do the filtering
+
+        # Same messages are sent by all nodes so only keep Node1 and always filters the other ones.
+        if (record.filename == get_filename(Node) and not msg.startswith("Node1")) or \
+                (match_method(record, Client.handleOneNodeMsg) and ("got msg from node Node1C:" not in msg)) or \
+                (match_method(record, Node.handleOneNodeMsg) and (
+                        re.search("Node[0-9] msg.+?Node[0-9]'\)$", msg))) or \
+                (match_method(record, ZStack.transmit) and (not msg.endswith("to Node1C"))) or \
+                (match_method(record, ZStack.sendPingPong) and (not msg.endswith("from Node1C"))):
+            return False
+
         if not APPLY_FILTERING:
             return True
 
@@ -300,14 +359,6 @@ class SovrinLogMessageFilter(logging.Filter):
         for method in functions_to_ignore:
             if match_method(record, method):
                 return False
-
-        # Same messages are sent by all nodes so only keep Node1
-        if (record.filename == get_filename(Node) and not msg.startswith("Node1")) or \
-                (match_method(record, Client.handleOneNodeMsg) and ("got msg from node Node1C:" not in msg)) or \
-                (match_method(record, ZStack.transmit) and (not msg.endswith("to Node1C"))) or \
-                (match_method(record, Node.handleOneNodeMsg) and (
-                        re.search("Node[0-9] msg.+?Node[0-9]'\)$", msg))):
-            return False
 
         return True
 
@@ -342,13 +393,12 @@ class SovrinLogHandler(logging.FileHandler):
                 decoded_message = eval(search_result.group(2)).decode()
                 try:
                     decoded_message = json.loads(decoded_message)
+                    formatted_message = format_data(decoded_message, 1)
+                    msg = search_result.group(1) + formatted_message + search_result.group(3)
+                    if msg[len(msg) - 1] != SEPARATOR:
+                        msg += SEPARATOR
                 except json.JSONDecodeError:
                     pass
-
-                formatted_message = format_data(decoded_message, 1)
-                msg = search_result.group(1) + formatted_message + search_result.group(3)
-                if msg[len(msg) - 1] != SEPARATOR:
-                    msg += SEPARATOR
         else:
             # Replace Z85 encoded NYMs by ASCII values. This is needed for further parsing.
             for (raw_id, decoded_id) in find_z85_uid_in_record(record):
@@ -426,14 +476,15 @@ def add_uid_to_dictionary(nym: str, name: [str, UIDNames], update: bool = False)
     if nym not in uid_names:
         if isinstance(name, UIDNames):
             name = make_friendly_name(name)
-        logging.info("Adding NYM/verkey ({}) to database as {}".format(nym, apply_colour(name, Colours.BOLD)))
+        logging.info("Adding NYM/verkey/hash ({}) to database as {}".format(nym, apply_colour(name, Colours.BOLD)))
         uid_names[nym] = ["{}".format(name)]
     else:
         if update:
             if isinstance(name, UIDNames):
                 name = make_friendly_name(name)
-            logging.info("Updating NYM/verkey ({}) in database from {} to {}".format(nym, uid_names[nym][0],
-                                                                                     apply_colour(name, Colours.BOLD)))
+            logging.info("Updating NYM/verkey/hash ({}) in database from {} to {}".format(nym, uid_names[nym][0],
+                                                                                          apply_colour(name,
+                                                                                                       Colours.BOLD)))
             uid_names[nym] = ["{}".format(name)] + uid_names[nym]
 
 
@@ -589,10 +640,10 @@ def find_b58_uid_in_record(record: logging.LogRecord) -> [str]:
         (ZStack.setupOwnKeysIfNeeded,
          "Signing and Encryption keys were not found for ([{}]{{44}})\.".format(B58_CHARACTERS)),
     ]:
-            if match_method(record, method):
-                search_result = re.search(search_string, record.msg)
-                if search_result:
-                    matches.append(search_result.group(1))
+        if match_method(record, method):
+            search_result = re.search(search_string, record.msg)
+            if search_result:
+                matches.append(search_result.group(1))
 
     return matches
 
@@ -615,11 +666,13 @@ def find_hashes_in_record(record: logging.LogRecord) -> [(str, UIDNames)]:
         Node.send
     ]:
         if match_method(record, method):
-            for key in [UIDNames.ROOT_HASH,
-                        UIDNames.MERKLE_ROOT,
-                        UIDNames.TXN_ROOT_HASH,
-                        UIDNames.STATE_ROOT_HASH,
-                        UIDNames.DIGEST]:
+            for key in [
+                UIDNames.ROOT_HASH,
+                UIDNames.MERKLE_ROOT,
+                UIDNames.TXN_ROOT_HASH,
+                UIDNames.STATE_ROOT_HASH,
+                UIDNames.DIGEST
+            ]:
                 # Some hashes are B58 encoded, others are hexadecimal
                 search_result = re.search("'{}': '(.+?)'".format(key.value), record.msg)
                 if search_result:
@@ -652,15 +705,15 @@ def find_z85_uid_in_record(record: logging.LogRecord) -> [(str, str)]:
         (ZStack.handlePingPong, "got ping from (b'[{}]{{40}}')".format(Z85_CHARACTERS)),
         (ZStack.sendPingPong, "(b'[{}]{{40}}')".format(Z85_CHARACTERS))
     ]:
-            if match_method(record, method):
-                search_result = re.search(search_string, record.msg)
-                if search_result:
-                    if search_result.group(1).startswith("b'"):
-                        friendly_public_key = rawToFriendly(z85_decode(search_result.group(1)[2:42]))
-                    else:
-                        friendly_public_key = rawToFriendly(z85_decode(search_result.group(1)))
-                    assert not friendly_public_key.startswith("b'")
-                    matches.append((search_result.group(1), friendly_public_key))
+        if match_method(record, method):
+            search_result = re.search(search_string, record.msg)
+            if search_result:
+                if search_result.group(1).startswith("b'"):
+                    friendly_public_key = rawToFriendly(z85_decode(search_result.group(1)[2:42]))
+                else:
+                    friendly_public_key = rawToFriendly(z85_decode(search_result.group(1)))
+                assert not friendly_public_key.startswith("b'")
+                matches.append((search_result.group(1), friendly_public_key))
 
     return matches
 
@@ -726,7 +779,7 @@ def add_pool_uids(pool: LocalPool, stewards: [Steward]) -> None:
     logging.info("Finished adding unique identifiers from pool")
 
 
-def setup_message_logging() -> None:
+def setup_message_logging(base_dir: str) -> None:
     """
     Delete existing logging-file and set-up logging handler, filter and formatter.
     """
@@ -753,7 +806,9 @@ def setup_message_logging() -> None:
     # unfiltered_file_handler.formatter = logging.Formatter(fmt=getConfig().logFormat,
     #                                                       style=getConfig().logFormatStyle)
     #
-    # logging.root.addHandler(unfiltered_file_handler)
+    # logging.root.addHandler(unfiltered_file_handler)3
+
+    logging.info("### Base directory is: {} ###".format(base_dir))
 
 
 def print_log_uid_database() -> None:
