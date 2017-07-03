@@ -7,50 +7,6 @@ facilitate understanding of the communication protocol happening between various
 Given the relevant Sovrin logs come from various libraries (sovrin*, plenum, anoncreds, zstack, etc.), they are
 not all consistent in their initial formatting, and the code below has many it/then tests to cater for various cases.
 It might not work for all but performs reasonably well with the test_getting_started_guide.py script.
-
-Tested with the following environment:
-anoncreds==0.3.4
-base58==0.2.5
-certifi==2017.4.17
-chardet==3.0.4
-Charm-Crypto==0.0.0
-crypto==1.4.1
-idna==2.5
-ioflo==1.5.4
-jsonpickle==0.9.4
-lazy-object-proxy==1.3.1
-ledger==0.2.15
-leveldb==0.194
-libnacl==1.5.1
-Naked==0.1.31
-orderedset==2.0
-plenum==0.3.18
-portalocker==0.5.7
-prompt-toolkit==0.57
-psutil==5.2.2
-py==1.4.34
-Pygments==2.2.0
-pyparsing==2.2.0
-pytest==3.1.2
-python-dateutil==2.6.0
-PyYAML==3.12
-pyzmq==16.0.2
-raet==0.6.7
-requests==2.18.1
-rlp==0.5.1
-semver==2.7.7
-sha3==0.2.1
-shellescape==3.4.1
-six==1.10.0
-sortedcontainers==1.5.7
-sovrin-common==0.2.13
-sovrin-node== from https://github.com/fabienpe/sovrin-node
-state-trie==0.1.1
-stp==0.1.11
-timeout-decorator==0.3.3
-ujson==1.35
-urllib3==1.21.1
-wcwidth==0.1.7
 """
 
 import ast
