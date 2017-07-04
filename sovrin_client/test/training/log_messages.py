@@ -17,6 +17,7 @@ import os
 import re
 import time
 import traceback
+from binascii import unhexlify
 from collections import OrderedDict, Counter
 from enum import Enum, unique
 
@@ -37,7 +38,7 @@ from sovrin_common.constants import ROLE, ATTR_NAMES, TXN_TYPE, TARGET_NYM, VERK
 from sovrin_common.roles import Roles as SovrinRoles
 from sovrin_common.transactions import SovrinTransactions
 from stp_zmq.zstack import ZStack
-from zmq.utils.z85 import Z85CHARS, decode as z85_decode
+from zmq.utils.z85 import Z85CHARS, decode as z85decode
 
 from sovrin_client.agent.agent import Agent
 from sovrin_client.agent.msg_constants import CLAIM_REQ_FIELD
@@ -50,11 +51,11 @@ if agentLoggingLevel != LOGGING_LEVEL:
     print("Change log level of agents (sovrin_common.config.agentLoggingLevel) to {}.".format(LOGGING_LEVEL))
     exit(0)
 
-APPLY_FILTERING = True  # Does not filter log messages, except the ones repeated for nodes
+APPLY_FILTERING = False  # Does not filter log messages, except the ones repeated for nodes
 SHOW_RANDOM = True  # False, replace random value with a comment, else add the comment before the random number.
 USE_COLOURS = True  # If True, use colours to improve readability of output.
 
-SHOW_UNFORMATTED_LOG = False  # Mostly for debugging purpose
+SHOW_UNFORMATTED_LOG = True  # Mostly for debugging purpose
 SHOW_FIELD_TYPE = False  # Mostly for debugging purpose
 
 # Default name of the logfile that is created
@@ -665,9 +666,9 @@ def find_z85_uid_in_record(record: logging.LogRecord) -> [(str, str)]:
             search_result = re.search(search_string, record.msg)
             if search_result:
                 if search_result.group(1).startswith("b'"):
-                    friendly_public_key = rawToFriendly(z85_decode(search_result.group(1)[2:42]))
+                    friendly_public_key = rawToFriendly(z85decode(search_result.group(1)[2:42]))
                 else:
-                    friendly_public_key = rawToFriendly(z85_decode(search_result.group(1)))
+                    friendly_public_key = rawToFriendly(z85decode(search_result.group(1)))
                 assert not friendly_public_key.startswith("b'")
                 matches.append((search_result.group(1), friendly_public_key))
 
@@ -698,8 +699,19 @@ def add_agent_uids(agents: [WalletedAgent]) -> None:
     """
     logging.info("Start adding unique identifiers from agents {}".format([agent.name for agent in agents]))
     for agent in agents:
-        add_uid_to_dictionary(agent.client.name, "{} {}".format(agent.name, "agent"), True)
-        add_uid_to_dictionary(agent.client.alias, "{} {}".format(agent.name, "agent alias"), True)
+        add_uid_to_dictionary(agent.client.name, "{} {}".format(agent.name, "client name"), True)
+        add_uid_to_dictionary(agent.client.alias, "{} {}".format(agent.name, "client alias"), True)
+        # Note that agent.client.nodestack.name == rawToFriendly(agent.client.nodestack.verKeyRaw)
+        add_uid_to_dictionary(agent.client.nodestack.name, "{} {}".format(agent.name, "client nodestack verkey"), True)
+        add_uid_to_dictionary(rawToFriendly(agent.client.nodestack.publicKeyRaw),
+                              "{} {}".format(agent.name, "client nodestack pubkey"), True)
+        if agent.endpoint:
+            add_uid_to_dictionary(rawToFriendly(agent.endpoint.verKeyRaw),
+                                  "{} {}".format(agent.name, "endpoint verkey"), True)
+            add_uid_to_dictionary(rawToFriendly(agent.endpoint.publicKeyRaw),
+                                  "{} {}".format(agent.name, "endpoint pubkey"), True)
+            add_uid_to_dictionary(rawToFriendly(z85decode(agent.endpoint.sigKey)),
+                                  "{} {}".format(agent.name, "endpoint sigkey"), True)
         add_wallet_uids(agent.wallet, agent.name)
     logging.info("Finished adding unique identifiers from agents {}".format([agent.name for agent in agents]))
 
@@ -710,9 +722,10 @@ def add_steward_uids(steward: Steward) -> None:
     random looking values to friendly names
     :param steward: An instance of the Steward class.
     """
-    add_uid_to_dictionary(steward.nym, steward.name, True)
+    add_uid_to_dictionary(steward.nym, "{} {}".format(steward.name, "NYM"), True)
     add_wallet_uids(steward.wallet, steward.name)
-    add_uid_to_dictionary(steward.node.verkey, steward.node.name)
+    add_uid_to_dictionary(rawToFriendly(unhexlify(steward.node.verkey)),
+                          "{} {}".format(steward.node.name, "verkey"), True)  # See ZStack.initLocalKeys
 
 
 # noinspection PyProtectedMember
@@ -731,7 +744,7 @@ def add_pool_uids(pool: LocalPool, stewards: [Steward]) -> None:
     for i in range(0, 4):
         add_uid_to_dictionary(pool.genesis_transactions[i * 2][TARGET_NYM], "Node{}".format(i + 1), True)
         add_uid_to_dictionary(pool.genesis_transactions[i * 2][VERKEY], "Node{} verkey".format(i + 1), True)
-        add_uid_to_dictionary(pool.genesis_transactions[i * 2 + 1][TARGET_NYM], "Node{}C".format(i + 1), True)
+        add_uid_to_dictionary(pool.genesis_transactions[i * 2 + 1][TARGET_NYM], "Node{}C verkey".format(i + 1), True)
     logging.info("Finished adding unique identifiers from pool")
 
 
@@ -774,8 +787,10 @@ def print_log_uid_database() -> None:
     """
     message = "List of identifiers found:\n"
     print("List of identifiers found:")
-    for nym, name in uid_names.items():
-        message += INDENT + "{}: {}\n".format(apply_colour(name, Colours.RED), nym)
-
+    for nym, names in uid_names.items():
+        message += INDENT + "['{}'".format(apply_colour(names[0], Colours.RED))
+        for name in names[1:]:
+            message += " was '{}'".format(apply_colour(name, Colours.GREY))
+        message += "]: {}\n".format(nym)
     logging.info(message)
     print(message)
