@@ -21,9 +21,9 @@ def getting_started(base_dir=None):
     setup_message_logging(base_dir)
 
     logging.info("### Start creating pool and stewards ###")
-    pool, steward = create_local_pool(base_dir)
+    pool, stewards = create_local_pool(base_dir)
 
-    add_pool_uids(pool, steward)
+    add_pool_uids(pool, stewards)
 
     logging.info("### Start creating and starting agents ###")
     agents = demo_start_agents(pool, pool, base_dir)
