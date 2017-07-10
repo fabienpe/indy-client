@@ -9,6 +9,10 @@ from plenum.common.signer_simple import SimpleSigner
 from plenum.common.startable import Status
 from plenum.common.types import HA
 from plenum.common.util import randomString
+from sovrin_client.agent.agent_net import AgentNet
+from sovrin_client.client.client import Client
+from sovrin_client.client.wallet.wallet import Wallet
+
 from sovrin_common.config import agentLoggingLevel
 from sovrin_common.config_util import getConfig
 from sovrin_common.identity import Identity
@@ -17,10 +21,6 @@ from stp_core.common.log import getlogger
 from stp_core.network.port_dispenser import genHa
 from stp_core.network.util import checkPortAvailable
 from stp_core.types import Identifier
-
-from sovrin_client.agent.agent_net import AgentNet
-from sovrin_client.client.client import Client
-from sovrin_client.client.wallet.wallet import Wallet
 
 logger = getlogger()
 logger.setLevel(agentLoggingLevel)
