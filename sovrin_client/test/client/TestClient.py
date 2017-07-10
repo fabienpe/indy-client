@@ -16,7 +16,7 @@ class TestClientStorage(TempStorage):
         self.cleanupDirectory(self.dataLocation)
 
 
-# @spyable(methods=[Client.handleOneNodeMsg])
+@spyable(methods=[Client.handleOneNodeMsg])
 class TestClient(Client, StackedTester, TestClientStorage):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
