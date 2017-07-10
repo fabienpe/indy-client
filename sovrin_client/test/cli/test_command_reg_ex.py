@@ -79,6 +79,17 @@ def testSendSchema(grammar):
         "send_schema": "send SCHEMA", NAME: name, VERSION: version, KEYS: keys})
 
 
+def test_send_get_schema(grammar):
+    dest = "LNAyBZUjvLF7duhrNtOWgdAKs18nHdbJUxJLT39iEGU="
+    name = "Degree"
+    version = "1.0"
+    matchedVars = getMatchedVariables(grammar,
+                                      'send GET_SCHEMA dest={} name={} version={}'
+                                      .format(dest, name, version))
+    assertCliTokens(matchedVars, {
+        "send_get_schema": "send GET_SCHEMA", NAME: name, VERSION: version})
+
+
 def testSendAttribRegEx(grammar):
     dest = "LNAyBZUjvLF7duhrNtOWgdAKs18nHdbJUxJLT39iEGU="
     raw = '{"legal org": "BRIGHAM YOUNG UNIVERSITY, PROVO, UT", ' \
@@ -87,6 +98,15 @@ def testSendAttribRegEx(grammar):
                                       'send ATTRIB dest={} raw={}'.format(dest, raw))
     assertCliTokens(matchedVars, {
         "send_attrib": "send ATTRIB", "dest_id": dest, "raw": raw})
+
+
+def test_send_get_attrib_regex(grammar):
+    dest = "LNAyBZUjvLF7duhrNtOWgdAKs18nHdbJUxJLT39iEGU="
+    raw = 'legal'
+    matchedVars = getMatchedVariables(grammar,
+                                      'send GET_ATTR dest={} raw={}'.format(dest, raw))
+    assertCliTokens(matchedVars, {
+        "send_get_attr": "send GET_ATTR", "dest_id": dest, "raw": raw})
 
 
 def testAddAttrRegEx(grammar):
@@ -105,6 +125,13 @@ def testSendClaimDefRegEx(grammar):
     from sovrin_common.constants import SIGNATURE_TYPE
     assertCliTokens(matchedVars, {
         "send_claim_def": "send CLAIM_DEF", REF: "15", SIGNATURE_TYPE: "CL"})
+
+
+def test_send_get_claim_def_regex(grammar):
+    matchedVars = getMatchedVariables(grammar, "send GET_CLAIM_DEF ref=15 signature_type=CL")
+    from sovrin_common.constants import SIGNATURE_TYPE
+    assertCliTokens(matchedVars, {
+        "send_get_claim_def": "send GET_CLAIM_DEF", REF: "15", SIGNATURE_TYPE: "CL"})
 
 
 def testShowFileCommandRegEx(grammar):
@@ -262,57 +289,28 @@ def testNewIdentifier(grammar):
     matchedVars = getMatchedVariables(
         grammar, "new identifier")
     assertCliTokens(matchedVars, {"new_id": "new identifier",
-                                  "id_or_abbr_or_crypto": None,
+                                  "id": None,
                                   "seed": None, "alias": None})
 
     matchedVars = getMatchedVariables(
         grammar, "new identifier as myalis")
     assertCliTokens(matchedVars,
-                    {"new_id": "new identifier", "id_or_abbr_or_crypto": None,
+                    {"new_id": "new identifier", "id": None,
                      "seed": None, "alias": "myalis"})
-
-    matchedVars = getMatchedVariables(
-        grammar, "new identifier abbr")
-    assertCliTokens(matchedVars, {"new_id": "new identifier", "id_or_abbr_or_crypto": "abbr",
-                                  "seed": None, "alias": None})
 
     matchedVars = getMatchedVariables(
         grammar, "new identifier 4QxzWk3ajdnEA37NdNU5Kt")
     assertCliTokens(matchedVars, {"new_id": "new identifier",
-                                  "id_or_abbr_or_crypto": "4QxzWk3ajdnEA37NdNU5Kt",
+                                  "id": "4QxzWk3ajdnEA37NdNU5Kt",
                                   "seed": None, "alias": None})
 
     matchedVars = getMatchedVariables(
         grammar, "new identifier 4QxzWk3ajdnEA37NdNU5Kt "
                  "with seed aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     assertCliTokens(matchedVars, {"new_id": "new identifier",
-                                  "id_or_abbr_or_crypto": "4QxzWk3ajdnEA37NdNU5Kt",
+                                  "id": "4QxzWk3ajdnEA37NdNU5Kt",
                                   "seed": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                                   "alias": None})
-
-    matchedVars = getMatchedVariables(
-        grammar,
-        "new identifier abbr with seed aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-    assertCliTokens(matchedVars, {"new_id": "new identifier",
-                                  "id_or_abbr_or_crypto": "abbr",
-                                  "seed": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                                  "alias": None})
-
-    matchedVars = getMatchedVariables(
-        grammar,
-        "new identifier crypto with seed aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-    assertCliTokens(matchedVars, {"new_id": "new identifier",
-                                  "id_or_abbr_or_crypto": "crypto",
-                                  "seed": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                                  "alias": None})
-
-    matchedVars = getMatchedVariables(
-        grammar,
-        "new identifier crypto with seed aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa as myalias")
-    assertCliTokens(matchedVars, {"new_id": "new identifier",
-                                  "id_or_abbr_or_crypto": "crypto",
-                                  "seed": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                                  "alias": "myalias"})
 
 
 def testAddGenTxnRegEx(grammar):

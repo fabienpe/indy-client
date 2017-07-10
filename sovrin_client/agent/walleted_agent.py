@@ -1,10 +1,8 @@
 import errno
 import os
 
-from anoncreds.protocol.repo.attributes_repo import AttributeRepoInMemory
-from plenum.common.util import normalizedWalletFileName, saveGivenWallet, getLastSavedWalletFileName, getWalletByPath
-from sovrin_common.config_util import getConfig
-
+from plenum.client.wallet import WalletStorageHelper
+from plenum.common.util import normalizedWalletFileName, getLastSavedWalletFileName, getWalletFilePath
 from sovrin_client.agent.agent import Agent
 from sovrin_client.agent.caching import Caching
 from sovrin_client.agent.walleted import Walleted
@@ -35,6 +33,7 @@ class WalletedAgent(Walleted, Agent, Caching):
             self.config.baseDir = basedirpath  # so forcing an update on baseDir
 
         self._wallet = None
+        self._walletSaver = None
 
         # restore any active wallet belonging to this agent
         self._restoreWallet()
@@ -71,6 +70,15 @@ class WalletedAgent(Walleted, Agent, Caching):
     def wallet(self, newWallet):
         self._wallet = newWallet
 
+    @property
+    def walletSaver(self):
+        if self._walletSaver is None:
+            self._walletSaver = WalletStorageHelper(
+                    self.getKeyringsBaseDir(),
+                    dmode=self.config.KEYRING_DIR_MODE,
+                    fmode=self.config.KEYRING_FILE_MODE)
+        return self._walletSaver
+
     @Agent.client.setter
     def client(self, client):
         Agent.client.fset(self, client)
@@ -84,10 +92,14 @@ class WalletedAgent(Walleted, Agent, Caching):
         self._saveAllWallets()
         super().stop(*args, **kwargs)
 
-    def getContextDir(self):
+    def getKeyringsBaseDir(self):
         return os.path.expanduser(os.path.join(
-            self.config.baseDir, self.config.keyringsDir, "agents",
-            self.name.lower().replace(" ", "-")))
+            self.config.baseDir, self.config.keyringsDir))
+
+    def getContextDir(self):
+        return os.path.join(
+            self.getKeyringsBaseDir(),
+            "agents", self.name.lower().replace(" ", "-"))
 
     def _getIssuerWalletContextDir(self):
         return os.path.join(self.getContextDir(), "issuer")
@@ -108,7 +120,8 @@ class WalletedAgent(Walleted, Agent, Caching):
         try:
             walletName = walletName or wallet.name
             fileName = normalizedWalletFileName(walletName)
-            walletFilePath = saveGivenWallet(wallet, fileName, contextDir)
+            walletFilePath = self.walletSaver.saveWallet(
+                wallet, getWalletFilePath(contextDir, fileName))
             self.logger.info('Active keyring "{}" saved ({})'.
                              format(walletName, walletFilePath))
         except IOError as ex:
@@ -138,7 +151,7 @@ class WalletedAgent(Walleted, Agent, Caching):
         try:
             walletFileName = getLastSavedWalletFileName(contextDir)
             walletFilePath = os.path.join(contextDir, walletFileName)
-            wallet = getWalletByPath(walletFilePath)
+            wallet = self.walletSaver.loadWallet(walletFilePath)
             # TODO: What about current wallet if any?
             return wallet, walletFilePath
         except ValueError as e:
