@@ -37,7 +37,7 @@ from sovrin_common.config_util import getConfig
 from sovrin_common.constants import ROLE, ATTR_NAMES, TXN_TYPE, TARGET_NYM, VERKEY, REVOCATION, PRIMARY
 from sovrin_common.roles import Roles as SovrinRoles
 from sovrin_common.transactions import SovrinTransactions
-from stp_zmq.zstack import ZStack
+from stp_zmq.zstack import KITZStack, ZStack
 from zmq.utils.z85 import Z85CHARS, decode as z85decode
 
 from sovrin_client.agent.agent import Agent
@@ -53,9 +53,9 @@ if agentLoggingLevel != LOGGING_LEVEL:
 
 APPLY_FILTERING = False  # Does not filter log messages, except the ones repeated for nodes
 SHOW_RANDOM = True  # False, replace random value with a comment, else add the comment before the random number.
-USE_COLOURS = True  # If True, use colours to improve readability of output.
+USE_COLOURS = False  # If True, use colours to improve readability of output.
 
-SHOW_UNFORMATTED_LOG = True  # Mostly for debugging purpose
+SHOW_UNFORMATTED_LOG = False  # Mostly for debugging purpose
 SHOW_FIELD_TYPE = False  # Mostly for debugging purpose
 
 # Default name of the logfile that is created
@@ -192,7 +192,6 @@ class Colours(Enum):
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
 
-
 @unique
 class UIDNames(Enum):
     """
@@ -295,10 +294,16 @@ class SovrinLogMessageFilter(logging.Filter):
         # Do the filtering
 
         # Same messages are sent by all nodes so only keep Node1 and always filters the other ones.
+        # noinspection PyProtectedMember
         if (record.filename == get_filename(Node) and not msg.startswith("Node1")) or \
                 (match_method(record, Client.handleOneNodeMsg) and ("got msg from node Node1C:" not in msg)) or \
+                (match_method(record, KITZStack.reconcileNodeReg) and ("matched remote Node1C" not in msg)) or \
+                (match_method(record, LedgerManager._compareLedger) and (not msg.startswith("Node1"))) or \
+                (match_method(record, LedgerManager.processLedgerStatus) and (not msg.startswith("Node1"))) or \
                 (match_method(record, Node.handleOneNodeMsg) and (
                         re.search("Node[0-9] msg.+?Node[0-9]'\)$", msg))) or \
+                (match_method(record, Node.validateNodeMsg) and (not msg.startswith("Node1"))) or \
+                (match_method(record, Propagator.tryForwarding) and (not msg.startswith("Node1"))) or \
                 (match_method(record, ZStack.transmit) and (not msg.endswith("to Node1C"))) or \
                 (match_method(record, ZStack.sendPingPong) and (not msg.endswith("from Node1C"))):
             return False
@@ -336,6 +341,7 @@ class SovrinLogHandler(logging.FileHandler):
         if record.filename == __file__:
             super().emit(record)
             return
+
         msg = record.msg
 
         if SHOW_UNFORMATTED_LOG:
@@ -509,9 +515,6 @@ def format_data(data, indent_level: int = 0, field_type: str = "") -> str:
                     field_type.endswith(OPERATION + "_" + f.RESULT.nm):
                 value = (SovrinTransactions(str(data)).name if data else "")
 
-            elif field_type.endswith(OPERATION + "_" + ROLE):
-                value = (SovrinRoles(str(data)).name if data else "")
-
             elif field_type.endswith(ATTR_NAMES):
                 value = (data.replace(",", ", "))
 
@@ -522,8 +525,7 @@ def format_data(data, indent_level: int = 0, field_type: str = "") -> str:
                     value = str(data)
 
             elif field_type.endswith(ROLE):
-                if UIDNames.has_value(str(data)):
-                    value = UIDNames(str(data)).name
+                value = SovrinRoles(str(data)).name if data else ""
 
             else:
                 for field, explanation in field_explanation.items():
