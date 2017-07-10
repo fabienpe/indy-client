@@ -105,7 +105,7 @@ def getting_started(base_dir=None):
     ####################################
 
     print(ACME_INVITE)
-    logging.info("### Alice loads Acme's invitation: {} ###".format(ACME_INVITE))
+    logging.info("### Alice loads Acme's invitation: ### {}".format(ACME_INVITE))
     link_to_acme = alice_agent.load_invitation_str(ACME_INVITE)
 
     print(link_to_acme)
@@ -154,7 +154,7 @@ def getting_started(base_dir=None):
     ####################################
 
     print(THRIFT_INVITE)
-    logging.info("### Alice loads Thrift's invitation: {} ###".format(THRIFT_INVITE))
+    logging.info("### Alice loads Thrift's invitation: ### {}".format(THRIFT_INVITE))
     link_to_thrift = alice_agent.load_invitation_str(THRIFT_INVITE)
 
     print(link_to_thrift)
