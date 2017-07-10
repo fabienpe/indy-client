@@ -11,6 +11,9 @@ from sovrin_client.anon_creds.sovrin_prover import SovrinProver
 from sovrin_client.anon_creds.sovrin_verifier import SovrinVerifier
 from sovrin_client.client.client import Client
 from sovrin_client.client.wallet.wallet import Wallet
+from sovrin_common.config_util import getConfig
+
+from anoncreds.protocol.repo.attributes_repo import AttributeRepoInMemory
 
 
 class WalletedAgent(Walleted, Agent, Caching):
