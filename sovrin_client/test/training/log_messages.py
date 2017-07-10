@@ -37,7 +37,8 @@ from sovrin_common.config_util import getConfig
 from sovrin_common.constants import ROLE, ATTR_NAMES, TXN_TYPE, TARGET_NYM, VERKEY, REVOCATION, PRIMARY
 from sovrin_common.roles import Roles as SovrinRoles
 from sovrin_common.transactions import SovrinTransactions
-from stp_zmq.zstack import KITZStack, ZStack
+from stp_zmq.kit_zstack import KITZStack
+from stp_zmq.zstack import ZStack
 from zmq.utils.z85 import Z85CHARS, decode as z85decode
 
 from sovrin_client.agent.agent import Agent
