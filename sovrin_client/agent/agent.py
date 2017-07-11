@@ -17,6 +17,7 @@ from sovrin_common.config import agentLoggingLevel
 from sovrin_common.config_util import getConfig
 from sovrin_common.identity import Identity
 from sovrin_common.strict_types import strict_types, decClassMethods
+
 from stp_core.common.log import getlogger
 from stp_core.network.port_dispenser import genHa
 from stp_core.network.util import checkPortAvailable

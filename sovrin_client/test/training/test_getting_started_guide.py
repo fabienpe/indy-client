@@ -51,7 +51,9 @@ def getting_started(base_dir=None):
 
     logging.info("### Start adding identifier for Alice agent ###")
     alice_agent.new_identifier()
+
     pool.add(alice_agent)
+
     pool.runFor(1)
 
     add_agent_uids([alice_agent])
@@ -69,25 +71,27 @@ def getting_started(base_dir=None):
 
     logging.info("### Alice sync link with Faber ###")
     alice_agent.sync(link_to_faber.name)
+
     demo_wait_for_sync(pool, link_to_faber)
 
     print(link_to_faber)
 
     logging.info("### Alice accepts Faber's invitation ###")
     alice_agent.accept_invitation(link_to_faber)
+
     demo_wait_for_accept(pool, link_to_faber)
 
     print(link_to_faber)
 
     logging.info("### Alice pings Faber ###")
     alice_agent.sendPing("Faber College")
+
     demo_wait_for_ping(pool)
 
     ####################################
     #  Transcription Claim
     ####################################
 
-    logging.info("### Alice wait for Transcript claim to be available  ###")
     demo_wait_for_claim_available(pool, link_to_faber, 'Transcript')
     claim_to_request = link_to_faber.find_available_claim(name='Transcript')
 
@@ -95,7 +99,9 @@ def getting_started(base_dir=None):
 
     logging.info("### Alice send claim request to Faber ###")
     pool.run(alice_agent.send_claim(link_to_faber, claim_to_request))
+
     demo_wait_for_claim_received(pool, alice_agent, 'Transcript')
+
     claims = pool.run(alice_agent.prover.wallet.getAllClaims())
 
     print(claims)
@@ -112,19 +118,23 @@ def getting_started(base_dir=None):
 
     logging.info("### Alice sync link with Acme ###")
     alice_agent.sync(link_to_acme.name)
+
     demo_wait_for_sync(pool, link_to_acme)
 
     print(link_to_acme)
 
     logging.info("### Alice accepts Acme's invitation ###")
     alice_agent.accept_invitation(link_to_acme)
+
     demo_wait_for_accept(pool, link_to_acme)
 
     print(link_to_acme)
 
     logging.info("### Alice sends Job Application ###")
     job_application_request = link_to_acme.find_proof_request(name='Job-Application')
+
     print(job_application_request)
+
     alice_agent.sendProof(link_to_acme, job_application_request)
 
     ####################################

@@ -1,8 +1,13 @@
 from plenum.test.test_stack import StackedTester, TestStack
+from plenum.test.testable import spyable
+from sovrin_client.client.client import Client
+
 from sovrin_common.test.helper import TempStorage
+
+from sovrin_common.config_util import getConfig
+
 from stp_core.common.log import getlogger
 
-from sovrin_client.client.client import Client
 
 logger = getlogger()
 
